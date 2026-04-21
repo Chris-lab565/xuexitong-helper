@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学习通作业助手 - 主应用</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <h1>🎓 学习通作业助手</h1>
+            <div class="user-info">
+                <span id="userEmail">user@example.com</span>
+                <button class="logout-btn" onclick="logout()">退出</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- 登录区域 -->
+        <div class="login-section">
+            <h2>🔐 学习通账号登录</h2>
+            <div class="cookie-notice">
+                <p>⚠️ 请从浏览器开发者工具复制 Cookie 进行登录</p>
+                <details>
+                    <summary>如何获取 Cookie？</summary>
+                    <ol>
+                        <li>浏览器打开 <a href="https://mooc1.chaoxing.com" target="_blank">学习通</a> 并登录</li>
+                        <li>按 F12 打开开发者工具</li>
+                        <li>切换到 Network（网络）标签</li>
+                        <li>刷新页面，点击任意请求</li>
+                        <li>在 Headers 中找到 Cookie，复制完整内容</li>
+                    </ol>
+                </details>
+            </div>
+            <form class="login-form" id="loginForm">
+                <div class="form-group" style="flex: 2;">
+                    <label for="cookie">Cookie</label>
+                    <input type="text" id="cookie" placeholder="请粘贴从浏览器复制的 Cookie">
+                </div>
+                <button type="submit" class="btn" id="loginBtn">登录</button>
+            </form>
+            <div class="message" id="loginMessage"></div>
+        </div>
+
+        <!-- 统计卡片 -->
+        <div class="stats">
+            <div class="stat-card">
+                <h3>待完成作业</h3>
+                <div class="number" id="pendingCount">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>已完成</h3>
+                <div class="number" id="doneCount">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>总作业数</h3>
+                <div class="number" id="totalCount">0</div>
+            </div>
+        </div>
+
+        <!-- 作业列表 -->
+        <div class="homework-list">
+            <h2>
+                📚 作业列表
+                <button class="btn btn-secondary btn-small refresh-btn" onclick="refreshHomework()">
+                    🔄 刷新
+                </button>
+            </h2>
+            
+            <div class="loading" id="loading">
+                <div class="loading-spinner"></div>
+                <p>正在加载作业...</p>
+            </div>
+
+            <div id="homeworkContainer">
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    <p>请先登录学习通账号</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 答案弹窗 -->
+    <div class="answer-modal" id="answerModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📝 作业详情</h3>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="questionsContainer">
+                <!-- 动态加载题目 -->
+            </div>
+        </div>
+    </div>
+
+    <script src="api.js"></script>
+    <script>
+        // 检查激活状态
+        function checkAuth() {
+            const activated = localStorage.getItem('xuexitong_activated');
+            const email = localStorage.getItem('xuexitong_email');
+            
+            if (!activated || !email) {
+                window.location.href = 'index.html';
+                return;
+            }
+            
+            document.getElementById('userEmail').textContent = email;
+        }
+        checkAuth();
+
+        // 退出登录
+        function logout() {
+            if (confirm('确定要退出吗？')) {
+                api.logout();
+                localStorage.removeItem('xuexitong_activated');
+                localStorage.removeItem('xuexitong_email');
+                localStorage.removeItem('xuexitong_code');
+                window.location.href = 'index.html';
+            }
+        }
+
+        // 学习通登录
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const cookie = document.getElementById('cookie').value.trim();
+            const email = localStorage.getItem('xuexitong_email') || '';
+            const loginBtn = document.getElementById('loginBtn');
+            
+            if (!cookie) {
+                showLoginMessage('请输入 Cookie', 'error');
+                return;
+            }
+            
+            loginBtn.disabled = true;
+            loginBtn.textContent = '登录中...';
+            
+            try {
+                const result = await api.login(cookie, email);
+                if (result.success) {
+                    showLoginMessage('登录成功！', 'success');
+                    loadHomework();
+                } else {
+                    showLoginMessage(result.message || '登录失败', 'error');
+                }
+            } catch (err) {
+                showLoginMessage('登录失败: ' + err.message, 'error');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = '登录';
+            }
+        });
+
+        // 加载作业列表
+        async function loadHomework() {
+            const container = document.getElementById('homeworkContainer');
+            const loading = document.getElementById('loading');
+            
+            loading.style.display = 'block';
+            container.innerHTML = '';
+            
+            try {
+                const result = await api.getHomework();
+                
+                if (!result.success) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                            <p>${result.message || '获取作业失败'}</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                const homework = result.data.list;
+                const stats = result.data.stats;
+                
+                // 更新统计
+                document.getElementById('pendingCount').textContent = stats.pending;
+                document.getElementById('doneCount').textContent = stats.done;
+                document.getElementById('totalCount').textContent = stats.total;
+                
+                if (homework.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            <p>暂无作业</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                homework.forEach(hw => {
+                    const statusClass = hw.status === 'pending' ? 'status-pending' : 
+                                       hw.status === 'done' ? 'status-done' : 'status-overdue';
+                    const statusText = hw.status === 'pending' ? '待完成' : 
+                                      hw.status === 'done' ? '已完成' : '已逾期';
+                    
+                    const hwEl = document.createElement('div');
+                    hwEl.className = 'homework-item';
+                    hwEl.innerHTML = `
+                        <div class="homework-header">
+                            <div>
+                                <div class="homework-title">${hw.title}</div>
+                            </div>
+                            <span class="homework-course">${hw.course}</span>
+                        </div>
+                        <div class="homework-meta">
+                            <span>📋 ${hw.questionCount} 道题目</span>
+                            <span class="status-badge ${statusClass}">${statusText}</span>
+                        </div>
+                        <div class="homework-actions">
+                            <button class="btn btn-small" onclick="showQuestions('${hw.id}', '${hw.doHomeworkUrl}', '${hw.title.replace(/'/g, "\\'")}')">📝 查看题目</button>
+                            <button class="btn btn-secondary btn-small" onclick="goToXuexitong()">🔗 去提交</button>
+                        </div>
+                    `;
+                    container.appendChild(hwEl);
+                });
+                
+            } catch (err) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <p>加载失败: ${err.message}</p>
+                    </div>
+                `;
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        // 刷新作业
+        function refreshHomework() {
+            loadHomework();
+        }
+
+        // 显示题目
+        async function showQuestions(workId, doUrl, title) {
+            const modal = document.getElementById('answerModal');
+            const container = document.getElementById('questionsContainer');
+            
+            modal.style.display = 'flex';
+            container.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>加载题目中...</p></div>';
+            
+            try {
+                const result = await api.getQuestions(workId, doUrl);
+                
+                if (!result.success) {
+                    container.innerHTML = `<p class="error">获取题目失败: ${result.message}</p>`;
+                    return;
+                }
+                
+                const questions = result.data.questions;
+                
+                let html = `<h4 style="margin-bottom: 20px; color: #667eea;">${title} - 共 ${questions.length} 题</h4>`;
+                
+                questions.forEach((q, idx) => {
+                    html += `
+                        <div class="question-box">
+                            <h4>第 ${idx + 1} 题 ${q.score ? `(${q.score}分)` : ''}</h4>
+                            <p>${q.stem || '（题目内容无法显示）'}</p>
+                            <div class="answer-actions" style="margin-top: 15px;">
+                                <button class="btn btn-small" onclick="generateAnswer('${q.questionId}', '${q.stem.replace(/'/g, "\\'")}', '${doUrl}')">🤖 AI生成答案</button>
+                                <button class="btn btn-secondary btn-small" onclick="submitAnswer('${workId}', '${doUrl}', '${q.questionId}')">💾 暂存答案</button>
+                            </div>
+                            <div id="answer-${q.questionId}" class="answer-box" style="display: none; margin-top: 15px;">
+                                <h4>AI 参考答案</h4>
+                                <p class="answer-content">生成中...</p>
+                                <button class="btn btn-small" onclick="copyAnswer('${q.questionId}')">📋 复制</button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+                
+            } catch (err) {
+                container.innerHTML = `<p class="error">加载题目失败: ${err.message}</p>`;
+            }
+        }
+
+        // 生成 AI 答案
+        async function generateAnswer(questionId, question, doUrl) {
+            const answerBox = document.getElementById(`answer-${questionId}`);
+            const answerContent = answerBox.querySelector('.answer-content');
+            
+            answerBox.style.display = 'block';
+            answerContent.textContent = 'AI 思考中...';
+            
+            try {
+                const result = await api.generateAnswer(question);
+                if (result.success) {
+                    answerContent.textContent = result.data.answer;
+                } else {
+                    answerContent.textContent = '生成答案失败: ' + result.message;
+                }
+            } catch (err) {
+                answerContent.textContent = '生成答案失败: ' + err.message;
+            }
+        }
+
+        // 复制答案
+        function copyAnswer(questionId) {
+            const answerBox = document.getElementById(`answer-${questionId}`);
+            const answer = answerBox.querySelector('.answer-content').textContent;
+            navigator.clipboard.writeText(answer).then(() => {
+                alert('答案已复制到剪贴板！');
+            });
+        }
+
+        // 提交答案（暂存）
+        async function submitAnswer(workId, doUrl, questionId) {
+            const answerBox = document.getElementById(`answer-${questionId}`);
+            const answer = answerBox.querySelector('.answer-content').textContent;
+            
+            if (!answer || answer === 'AI 思考中...' || answer.includes('失败')) {
+                alert('请先生成答案');
+                return;
+            }
+            
+            try {
+                const result = await api.submitAnswer(workId, doUrl, questionId, answer, true);
+                if (result.success) {
+                    alert('答案已暂存！');
+                } else {
+                    alert('暂存失败: ' + result.message);
+                }
+            } catch (err) {
+                alert('暂存失败: ' + err.message);
+            }
+        }
+
+        // 关闭弹窗
+        function closeModal() {
+            document.getElementById('answerModal').style.display = 'none';
+        }
+
+        // 跳转学习通
+        function goToXuexitong() {
+            window.open('https://mooc1.chaoxing.com', '_blank');
+        }
+
+        // 显示登录消息
+        function showLoginMessage(text, type) {
+            const msgEl = document.getElementById('loginMessage');
+            msgEl.textContent = text;
+            msgEl.className = 'message ' + type;
+        }
+
+        // 点击弹窗外部关闭
+        document.getElementById('answerModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+
+        // 页面加载时检查是否已登录
+        if (localStorage.getItem('xuexitong_loggedin') === 'true') {
+            loadHomework();
+        }
+    </script>
+</body>
+</html>

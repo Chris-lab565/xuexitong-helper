@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学习通作业助手 - 激活</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 420px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo h1 {
+            font-size: 28px;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .logo p {
+            color: #666;
+            font-size: 14px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 15px;
+            transition: all 0.3s;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .message {
+            margin-top: 16px;
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-size: 14px;
+            display: none;
+        }
+        .message.error {
+            background: #ffebee;
+            color: #c62828;
+            display: block;
+        }
+        .message.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            display: block;
+        }
+        .buy-section {
+            margin-top: 30px;
+            padding-top: 25px;
+            border-top: 1px solid #eee;
+            text-align: center;
+        }
+        .buy-section h3 {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 12px;
+        }
+        .price {
+            font-size: 32px;
+            color: #667eea;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        .price-tag {
+            font-size: 14px;
+            color: #999;
+            text-decoration: line-through;
+            margin-left: 8px;
+        }
+        .qr-placeholder {
+            width: 180px;
+            height: 180px;
+            background: #f5f5f5;
+            border-radius: 12px;
+            margin: 15px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            font-size: 13px;
+            border: 2px dashed #ddd;
+        }
+        .contact {
+            margin-top: 12px;
+            font-size: 13px;
+            color: #666;
+        }
+        .features {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        .features h4 {
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .features ul {
+            list-style: none;
+            font-size: 13px;
+            color: #666;
+        }
+        .features li {
+            padding: 4px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+        .features li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>🎓 学习通作业助手</h1>
+            <p>一键查作业 · 智能答题 · 自动提交</p>
+        </div>
+
+        <form id="activateForm">
+            <div class="form-group">
+                <label for="email">邮箱地址</label>
+                <input type="email" id="email" placeholder="请输入您的邮箱" required>
+            </div>
+            <div class="form-group">
+                <label for="code">激活码</label>
+                <input type="text" id="code" placeholder="请输入激活码，如：XUEXI-2025-XXXXXX" required>
+            </div>
+            <button type="submit" class="btn" id="submitBtn">激活使用</button>
+            <div class="message" id="message"></div>
+        </form>
+
+        <div class="buy-section">
+            <h3>还没有激活码？</h3>
+            <div class="price">
+                ¥29<span class="price-tag">¥49</span>
+            </div>
+            <p style="font-size: 13px; color: #666; margin-bottom: 10px;">一次性付费 · 终身使用 · 多设备同步</p>
+            
+            <div class="qr-code-container" id="qrCode">
+                <img src="wechat-qr.jpg" alt="微信收款码" style="max-width: 200px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+            </div>
+            <p style="font-size: 12px; color: #999; margin-top: 10px;">付款后截图联系客服获取激活码</p>
+            
+            <div class="contact">
+                💬 客服微信：xuexitong_helper
+            </div>
+            
+            <!-- 使用说明折叠面板 -->
+            <div class="instructions" style="margin-top: 20px; text-align: left;">
+                <details style="background: #f8f9fa; border-radius: 10px; padding: 15px;">
+                    <summary style="font-weight: 600; color: #333; cursor: pointer; font-size: 14px;">📖 使用说明（点击展开）</summary>
+                    <div style="margin-top: 15px; font-size: 13px; color: #555; line-height: 1.8;">
+                        <p><strong>【购买】</strong></p>
+                        <p>1. 扫码付款 ¥29（限时优惠）</p>
+                        <p>2. 截图付款记录，加客服微信：xuexitong_helper</p>
+                        <p>3. 客服发送激活码</p>
+                        <br>
+                        <p><strong>【激活】</strong></p>
+                        <p>1. 打开本网站</p>
+                        <p>2. 输入邮箱 + 激活码</p>
+                        <p>3. 点击"激活使用"</p>
+                        <br>
+                        <p><strong>【使用】</strong></p>
+                        <p>1. 登录你的学习通账号</p>
+                        <p>2. 查看作业列表</p>
+                        <p>3. 点击"查看答案"获取AI参考答案</p>
+                        <p>4. 复制答案到学习通提交</p>
+                        <br>
+                        <p><strong>【换设备】</strong></p>
+                        <p>用同一邮箱+激活码重新激活即可恢复</p>
+                        <br>
+                        <p><strong>【售后】</strong></p>
+                        <p>有问题联系客服微信：xuexitong_helper</p>
+                    </div>
+                </details>
+            </div>
+        </div>
+
+        <div class="features">
+            <h4>✨ 功能特色</h4>
+            <ul>
+                <li>自动查询所有课程作业</li>
+                <li>AI智能生成答题参考</li>
+                <li>一键提交省时省力</li>
+                <li>多设备数据同步</li>
+                <li>持续更新维护</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // 有效的激活码列表（实际使用时会从服务器验证）
+        const VALID_CODES = [
+            'XUEXI-2025-7A3B9C', 'XUEXI-2025-8D2E1F', 'XUEXI-2025-4G5H6I',
+            'XUEXI-2025-9J0K1L', 'XUEXI-2025-2M3N4O', 'XUEXI-2025-5P6Q7R',
+            'XUEXI-2025-8S9T0U', 'XUEXI-2025-1V2W3X', 'XUEXI-2025-4Y5Z6A',
+            'XUEXI-2025-7B8C9D', 'XUEXI-2025-0E1F2G', 'XUEXI-2025-3H4I5J',
+            'XUEXI-2025-6K7L8M', 'XUEXI-2025-9N0O1P', 'XUEXI-2025-2Q3R4S',
+            'XUEXI-2025-5T6U7V', 'XUEXI-2025-8W9X0Y', 'XUEXI-2025-1Z2A3B',
+            'XUEXI-2025-4C5D6E', 'XUEXI-2025-7F8G9H', 'XUEXI-2025-0I1J2K',
+            'XUEXI-2025-3L4M5N', 'XUEXI-2025-6O7P8Q', 'XUEXI-2025-9R0S1T',
+            'XUEXI-2025-2U3V4W', 'XUEXI-2025-5X6Y7Z', 'XUEXI-2025-8A9B0C',
+            'XUEXI-2025-1D2E3F', 'XUEXI-2025-4G5H6I', 'XUEXI-2025-7J8K9L'
+        ];
+
+        // 检查本地存储的激活状态
+        function checkActivation() {
+            const activated = localStorage.getItem('xuexitong_activated');
+            const savedEmail = localStorage.getItem('xuexitong_email');
+            const savedCode = localStorage.getItem('xuexitong_code');
+            
+            if (activated === 'true' && savedEmail && savedCode) {
+                // 已激活，跳转到应用页面
+                window.location.href = 'app.html';
+            }
+        }
+
+        // 页面加载时检查
+        checkActivation();
+
+        // 激活表单提交
+        document.getElementById('activateForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value.trim();
+            const code = document.getElementById('code').value.trim().toUpperCase();
+            const messageEl = document.getElementById('message');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            // 验证邮箱格式
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                showMessage('请输入有效的邮箱地址', 'error');
+                return;
+            }
+            
+            // 验证激活码格式
+            const codeRegex = /^XUEXI-2025-[A-Z0-9]{6}$/;
+            if (!codeRegex.test(code)) {
+                showMessage('激活码格式不正确', 'error');
+                return;
+            }
+            
+            submitBtn.disabled = true;
+            submitBtn.textContent = '验证中...';
+            
+            // 模拟验证延迟
+            setTimeout(() => {
+                if (VALID_CODES.includes(code)) {
+                    // 激活成功
+                    localStorage.setItem('xuexitong_activated', 'true');
+                    localStorage.setItem('xuexitong_email', email);
+                    localStorage.setItem('xuexitong_code', code);
+                    localStorage.setItem('xuexitong_activateTime', new Date().toISOString());
+                    
+                    showMessage('激活成功！正在进入...', 'success');
+                    
+                    setTimeout(() => {
+                        window.location.href = 'app.html';
+                    }, 1000);
+                } else {
+                    showMessage('激活码无效或已被使用', 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '激活使用';
+                }
+            }, 800);
+        });
+
+        function showMessage(text, type) {
+            const messageEl = document.getElementById('message');
+            messageEl.textContent = text;
+            messageEl.className = 'message ' + type;
+        }
+    </script>
+</body>
+</html>
