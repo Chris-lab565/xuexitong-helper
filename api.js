@@ -6,21 +6,37 @@
 // 检查扩展是否安装
 function checkExtension() {
     return new Promise((resolve) => {
-        window.postMessage({ type: 'XUEXITONG_HELPER_GET_COOKIE' }, '*');
+        // 先检查是否已经收到扩展安装信号
+        if (window.xuexitongExtensionInstalled) {
+            resolve(true);
+            return;
+        }
+        
+        // 发送 ping 请求
+        window.postMessage({ type: 'XUEXITONG_HELPER_PING' }, '*');
         
         const timeout = setTimeout(() => {
             resolve(false);
-        }, 1000);
+        }, 2000);
         
         window.addEventListener('message', function handler(event) {
-            if (event.data.type === 'XUEXITONG_HELPER_COOKIE_RESPONSE') {
+            if (event.data.type === 'XUEXITONG_HELPER_PONG' || 
+                event.data.type === 'XUEXITONG_HELPER_EXTENSION_INSTALLED') {
                 clearTimeout(timeout);
                 window.removeEventListener('message', handler);
+                window.xuexitongExtensionInstalled = true;
                 resolve(true);
             }
-        }, { once: true });
+        });
     });
 }
+
+// 监听扩展安装信号
+window.addEventListener('message', (event) => {
+    if (event.data.type === 'XUEXITONG_HELPER_EXTENSION_INSTALLED') {
+        window.xuexitongExtensionInstalled = true;
+    }
+});
 
 // 获取学习通 Cookie（通过扩展）
 function getXuexitongCookie() {
