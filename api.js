@@ -3,7 +3,7 @@
  */
 
 // API 基础 URL
-const API_BASE_URL = 'https://xuexitong-api.woaichixiaodangao.workers.dev';
+const API_BASE_URL = 'https://xuexitong-api.vercel.app';
 
 // 存储 sessionId
 function getSessionId() {
