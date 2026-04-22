@@ -5,6 +5,98 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>学习通作业助手 - 主应用</title>
     <link rel="stylesheet" href="styles.css">
+    <style>
+        .apikey-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .apikey-section h2 {
+            margin-top: 0;
+            font-size: 18px;
+        }
+        .apikey-input-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .apikey-input-group input {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .apikey-section .btn {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .apikey-section .btn:hover {
+            background: #f0f0f0;
+        }
+        .apikey-help {
+            margin-top: 10px;
+            font-size: 13px;
+            opacity: 0.9;
+        }
+        .apikey-help a {
+            color: #ffd700;
+            text-decoration: underline;
+        }
+        .apikey-status {
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 5px;
+            font-size: 13px;
+        }
+        .apikey-status.ok {
+            background: rgba(212, 237, 218, 0.3);
+        }
+        .apikey-status.error {
+            background: rgba(248, 215, 218, 0.3);
+        }
+        .extension-notice {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .extension-notice h3 {
+            margin-top: 0;
+            color: #856404;
+        }
+        .extension-notice ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .extension-notice li {
+            margin: 5px 0;
+            color: #856404;
+        }
+        .extension-status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        .extension-status.ok {
+            background: #d4edda;
+            color: #155724;
+        }
+        .extension-status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
 </head>
 <body>
     <header class="header">
@@ -18,30 +110,43 @@
     </header>
 
     <div class="container">
+        <!-- 扩展安装提示 -->
+        <div class="extension-notice" id="extensionNotice">
+            <h3>🔌 请先安装浏览器扩展</h3>
+            <p>本工具需要浏览器扩展才能获取学习通数据。</p>
+            <ol>
+                <li>下载扩展文件：<a href="xuexitong-extension.zip" download>点击下载</a></li>
+                <li>解压下载的 zip 文件</li>
+                <li>打开浏览器扩展管理页面：chrome://extensions/</li>
+                <li>开启「开发者模式」</li>
+                <li>点击「加载已解压的扩展程序」，选择解压后的文件夹</li>
+            </ol>
+            <p><span class="extension-status error" id="extensionStatus">❌ 扩展未安装</span></p>
+        </div>
+
+        <!-- API Key 设置 -->
+        <div class="apikey-section">
+            <h2>🔑 设置 Moonshot API Key</h2>
+            <p>用于 AI 生成答案。新用户注册免费送 15 元额度。</p>
+            <div class="apikey-input-group">
+                <input type="password" id="apiKey" placeholder="请输入 Moonshot API Key">
+                <button class="btn" onclick="saveApiKey()">保存</button>
+                <button class="btn" onclick="testApiKey()">测试</button>
+            </div>
+            <div class="apikey-help">
+                还没有 API Key？<a href="https://platform.moonshot.cn" target="_blank">点击注册 Moonshot</a>（新用户免费 15 元额度）
+            </div>
+            <div class="apikey-status" id="apiKeyStatus" style="display: none;"></div>
+        </div>
+
         <!-- 登录区域 -->
         <div class="login-section">
-            <h2>🔐 学习通账号登录</h2>
-            <div class="cookie-notice">
-                <p>⚠️ 请从浏览器开发者工具复制 Cookie 进行登录</p>
-                <details>
-                    <summary>如何获取 Cookie？</summary>
-                    <ol>
-                        <li>浏览器打开 <a href="https://mooc1.chaoxing.com" target="_blank">学习通</a> 并登录</li>
-                        <li>按 F12 打开开发者工具</li>
-                        <li>切换到 Network（网络）标签</li>
-                        <li>刷新页面，点击任意请求</li>
-                        <li>在 Headers 中找到 Cookie，复制完整内容</li>
-                    </ol>
-                </details>
-            </div>
-            <form class="login-form" id="loginForm">
-                <div class="form-group" style="flex: 2;">
-                    <label for="cookie">Cookie</label>
-                    <input type="text" id="cookie" placeholder="请粘贴从浏览器复制的 Cookie">
-                </div>
-                <button type="submit" class="btn" id="loginBtn">登录</button>
-            </form>
-            <div class="message" id="loginMessage"></div>
+            <h2>🔐 连接学习通</h2>
+            <p style="color: #666; margin-bottom: 15px;">确保已安装扩展并登录学习通官网</p>
+            <button class="btn" id="connectBtn" onclick="connectXuexitong()" style="width: 100%;">
+                🚀 一键获取作业
+            </button>
+            <div class="message" id="connectMessage"></div>
         </div>
 
         <!-- 统计卡片 -->
@@ -79,7 +184,7 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                         <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                     </svg>
-                    <p>请先登录学习通账号</p>
+                    <p>点击「一键获取作业」开始</p>
                 </div>
             </div>
         </div>
@@ -114,48 +219,127 @@
         }
         checkAuth();
 
+        // 检查扩展是否安装
+        async function checkExtension() {
+            const installed = await api.checkExtension();
+            const statusEl = document.getElementById('extensionStatus');
+            const noticeEl = document.getElementById('extensionNotice');
+            
+            if (installed) {
+                statusEl.textContent = '✅ 扩展已安装';
+                statusEl.className = 'extension-status ok';
+                noticeEl.style.display = 'none';
+            } else {
+                statusEl.textContent = '❌ 扩展未安装';
+                statusEl.className = 'extension-status error';
+                noticeEl.style.display = 'block';
+            }
+            
+            return installed;
+        }
+
+        // 页面加载时检查扩展
+        checkExtension();
+
         // 退出登录
         function logout() {
             if (confirm('确定要退出吗？')) {
-                api.logout();
                 localStorage.removeItem('xuexitong_activated');
                 localStorage.removeItem('xuexitong_email');
                 localStorage.removeItem('xuexitong_code');
+                localStorage.removeItem('moonshot_api_key');
                 window.location.href = 'index.html';
             }
         }
 
-        // 学习通登录
-        document.getElementById('loginForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const cookie = document.getElementById('cookie').value.trim();
-            const email = localStorage.getItem('xuexitong_email') || '';
-            const loginBtn = document.getElementById('loginBtn');
-            
-            if (!cookie) {
-                showLoginMessage('请输入 Cookie', 'error');
+        // 保存 API Key
+        function saveApiKey() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            if (!apiKey) {
+                showApiKeyStatus('请输入 API Key', 'error');
                 return;
             }
             
-            loginBtn.disabled = true;
-            loginBtn.textContent = '登录中...';
+            localStorage.setItem('moonshot_api_key', apiKey);
+            showApiKeyStatus('API Key 已保存', 'ok');
+        }
+
+        // 测试 API Key
+        async function testApiKey() {
+            const apiKey = document.getElementById('apiKey').value.trim() || localStorage.getItem('moonshot_api_key');
+            
+            if (!apiKey) {
+                showApiKeyStatus('请输入 API Key', 'error');
+                return;
+            }
+            
+            showApiKeyStatus('测试中...', 'ok');
             
             try {
-                const result = await api.login(cookie, email);
-                if (result.success) {
-                    showLoginMessage('登录成功！', 'success');
-                    loadHomework();
+                const response = await fetch('https://api.moonshot.cn/v1/models', {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                });
+                
+                if (response.ok) {
+                    showApiKeyStatus('✅ API Key 有效！', 'ok');
+                    localStorage.setItem('moonshot_api_key', apiKey);
                 } else {
-                    showLoginMessage(result.message || '登录失败', 'error');
+                    const error = await response.json();
+                    showApiKeyStatus('❌ ' + (error.error?.message || 'API Key 无效'), 'error');
                 }
             } catch (err) {
-                showLoginMessage('登录失败: ' + err.message, 'error');
-            } finally {
-                loginBtn.disabled = false;
-                loginBtn.textContent = '登录';
+                showApiKeyStatus('❌ 测试失败: ' + err.message, 'error');
             }
-        });
+        }
+
+        // 显示 API Key 状态
+        function showApiKeyStatus(text, type) {
+            const statusEl = document.getElementById('apiKeyStatus');
+            statusEl.textContent = text;
+            statusEl.className = 'apikey-status ' + type;
+            statusEl.style.display = 'block';
+        }
+
+        // 连接学习通
+        async function connectXuexitong() {
+            const btn = document.getElementById('connectBtn');
+            const msgEl = document.getElementById('connectMessage');
+            
+            // 检查扩展
+            const extensionInstalled = await checkExtension();
+            if (!extensionInstalled) {
+                msgEl.textContent = '请先安装浏览器扩展';
+                msgEl.className = 'message error';
+                return;
+            }
+            
+            // 检查 API Key
+            const apiKey = localStorage.getItem('moonshot_api_key');
+            if (!apiKey) {
+                msgEl.textContent = '请先设置 Moonshot API Key';
+                msgEl.className = 'message error';
+                document.getElementById('apiKey').focus();
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = '获取中...';
+            msgEl.textContent = '';
+            
+            try {
+                await loadHomework();
+                msgEl.textContent = '获取成功！';
+                msgEl.className = 'message success';
+            } catch (err) {
+                msgEl.textContent = '获取失败: ' + err.message;
+                msgEl.className = 'message error';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🚀 一键获取作业';
+            }
+        }
 
         // 加载作业列表
         async function loadHomework() {
@@ -166,29 +350,18 @@
             container.innerHTML = '';
             
             try {
-                const result = await api.getHomework();
-                
-                if (!result.success) {
-                    container.innerHTML = `
-                        <div class="empty-state">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                            </svg>
-                            <p>${result.message || '获取作业失败'}</p>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                const homework = result.data.list;
-                const stats = result.data.stats;
+                const data = await api.getHomework();
                 
                 // 更新统计
-                document.getElementById('pendingCount').textContent = stats.pending;
-                document.getElementById('doneCount').textContent = stats.done;
-                document.getElementById('totalCount').textContent = stats.total;
+                const pending = data.list?.filter(h => h.status === 'pending').length || 0;
+                const done = data.list?.filter(h => h.status === 'done').length || 0;
+                const total = data.list?.length || 0;
                 
-                if (homework.length === 0) {
+                document.getElementById('pendingCount').textContent = pending;
+                document.getElementById('doneCount').textContent = done;
+                document.getElementById('totalCount').textContent = total;
+                
+                if (!data.list || data.list.length === 0) {
                     container.innerHTML = `
                         <div class="empty-state">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -200,7 +373,7 @@
                     return;
                 }
                 
-                homework.forEach(hw => {
+                data.list.forEach(hw => {
                     const statusClass = hw.status === 'pending' ? 'status-pending' : 
                                        hw.status === 'done' ? 'status-done' : 'status-overdue';
                     const statusText = hw.status === 'pending' ? '待完成' : 
@@ -211,17 +384,17 @@
                     hwEl.innerHTML = `
                         <div class="homework-header">
                             <div>
-                                <div class="homework-title">${hw.title}</div>
+                                <div class="homework-title">${hw.title || '未命名作业'}</div>
                             </div>
-                            <span class="homework-course">${hw.course}</span>
+                            <span class="homework-course">${hw.courseName || ''}</span>
                         </div>
                         <div class="homework-meta">
-                            <span>📋 ${hw.questionCount} 道题目</span>
+                            <span>⏰ 截止: ${hw.endTime || '无截止日期'}</span>
                             <span class="status-badge ${statusClass}">${statusText}</span>
                         </div>
                         <div class="homework-actions">
-                            <button class="btn btn-small" onclick="showQuestions('${hw.id}', '${hw.doHomeworkUrl}', '${hw.title.replace(/'/g, "\\'")}')">📝 查看题目</button>
-                            <button class="btn btn-secondary btn-small" onclick="goToXuexitong()">🔗 去提交</button>
+                            <button class="btn btn-small" onclick="showQuestions('${hw.workId}', '${hw.url || ''}', '${(hw.title || '').replace(/'/g, "\\'")}')">📝 查看题目</button>
+                            <button class="btn btn-secondary btn-small" onclick="goToXuexitong('${hw.url || ''}')">🔗 去提交</button>
                         </div>
                     `;
                     container.appendChild(hwEl);
@@ -234,6 +407,7 @@
                             <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                         </svg>
                         <p>加载失败: ${err.message}</p>
+                        <p style="font-size: 12px; color: #999;">请确保已登录学习通官网</p>
                     </div>
                 `;
             } finally {
@@ -247,7 +421,13 @@
         }
 
         // 显示题目
-        async function showQuestions(workId, doUrl, title) {
+        async function showQuestions(workId, url, title) {
+            const apiKey = localStorage.getItem('moonshot_api_key');
+            if (!apiKey) {
+                alert('请先设置 Moonshot API Key');
+                return;
+            }
+            
             const modal = document.getElementById('answerModal');
             const container = document.getElementById('questionsContainer');
             
@@ -255,36 +435,23 @@
             container.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>加载题目中...</p></div>';
             
             try {
-                const result = await api.getQuestions(workId, doUrl);
+                const html = await api.getQuestions(workId, url);
                 
-                if (!result.success) {
-                    container.innerHTML = `<p class="error">获取题目失败: ${result.message}</p>`;
-                    return;
-                }
-                
-                const questions = result.data.questions;
-                
-                let html = `<h4 style="margin-bottom: 20px; color: #667eea;">${title} - 共 ${questions.length} 题</h4>`;
-                
-                questions.forEach((q, idx) => {
-                    html += `
-                        <div class="question-box">
-                            <h4>第 ${idx + 1} 题 ${q.score ? `(${q.score}分)` : ''}</h4>
-                            <p>${q.stem || '（题目内容无法显示）'}</p>
-                            <div class="answer-actions" style="margin-top: 15px;">
-                                <button class="btn btn-small" onclick="generateAnswer('${q.questionId}', '${q.stem.replace(/'/g, "\\'")}', '${doUrl}')">🤖 AI生成答案</button>
-                                <button class="btn btn-secondary btn-small" onclick="submitAnswer('${workId}', '${doUrl}', '${q.questionId}')">💾 暂存答案</button>
-                            </div>
-                            <div id="answer-${q.questionId}" class="answer-box" style="display: none; margin-top: 15px;">
-                                <h4>AI 参考答案</h4>
-                                <p class="answer-content">生成中...</p>
-                                <button class="btn btn-small" onclick="copyAnswer('${q.questionId}')">📋 复制</button>
-                            </div>
+                // 解析题目（简单解析，实际需要根据学习通页面结构调整）
+                container.innerHTML = `
+                    <h4 style="margin-bottom: 20px; color: #667eea;">${title}</h4>
+                    <div class="question-box">
+                        <p>题目内容已加载，请在学习通页面查看具体题目。</p>
+                        <div class="answer-actions" style="margin-top: 15px;">
+                            <button class="btn btn-small" onclick="generateAnswer('${workId}', '${title.replace(/'/g, "\\'")}')">🤖 AI生成答案思路</button>
                         </div>
-                    `;
-                });
-                
-                container.innerHTML = html;
+                        <div id="answer-${workId}" class="answer-box" style="display: none; margin-top: 15px;">
+                            <h4>AI 参考思路</h4>
+                            <p class="answer-content">生成中...</p>
+                            <button class="btn btn-small" onclick="copyAnswer('${workId}')">📋 复制</button>
+                        </div>
+                    </div>
+                `;
                 
             } catch (err) {
                 container.innerHTML = `<p class="error">加载题目失败: ${err.message}</p>`;
@@ -292,54 +459,29 @@
         }
 
         // 生成 AI 答案
-        async function generateAnswer(questionId, question, doUrl) {
-            const answerBox = document.getElementById(`answer-${questionId}`);
+        async function generateAnswer(workId, question) {
+            const apiKey = localStorage.getItem('moonshot_api_key');
+            const answerBox = document.getElementById(`answer-${workId}`);
             const answerContent = answerBox.querySelector('.answer-content');
             
             answerBox.style.display = 'block';
             answerContent.textContent = 'AI 思考中...';
             
             try {
-                const result = await api.generateAnswer(question);
-                if (result.success) {
-                    answerContent.textContent = result.data.answer;
-                } else {
-                    answerContent.textContent = '生成答案失败: ' + result.message;
-                }
+                const answer = await api.generateAnswer(question, apiKey);
+                answerContent.textContent = answer;
             } catch (err) {
                 answerContent.textContent = '生成答案失败: ' + err.message;
             }
         }
 
         // 复制答案
-        function copyAnswer(questionId) {
-            const answerBox = document.getElementById(`answer-${questionId}`);
+        function copyAnswer(workId) {
+            const answerBox = document.getElementById(`answer-${workId}`);
             const answer = answerBox.querySelector('.answer-content').textContent;
             navigator.clipboard.writeText(answer).then(() => {
                 alert('答案已复制到剪贴板！');
             });
-        }
-
-        // 提交答案（暂存）
-        async function submitAnswer(workId, doUrl, questionId) {
-            const answerBox = document.getElementById(`answer-${questionId}`);
-            const answer = answerBox.querySelector('.answer-content').textContent;
-            
-            if (!answer || answer === 'AI 思考中...' || answer.includes('失败')) {
-                alert('请先生成答案');
-                return;
-            }
-            
-            try {
-                const result = await api.submitAnswer(workId, doUrl, questionId, answer, true);
-                if (result.success) {
-                    alert('答案已暂存！');
-                } else {
-                    alert('暂存失败: ' + result.message);
-                }
-            } catch (err) {
-                alert('暂存失败: ' + err.message);
-            }
         }
 
         // 关闭弹窗
@@ -348,15 +490,12 @@
         }
 
         // 跳转学习通
-        function goToXuexitong() {
-            window.open('https://mooc1.chaoxing.com', '_blank');
-        }
-
-        // 显示登录消息
-        function showLoginMessage(text, type) {
-            const msgEl = document.getElementById('loginMessage');
-            msgEl.textContent = text;
-            msgEl.className = 'message ' + type;
+        function goToXuexitong(url) {
+            if (url) {
+                window.open(url, '_blank');
+            } else {
+                window.open('https://mooc1.chaoxing.com', '_blank');
+            }
         }
 
         // 点击弹窗外部关闭
@@ -364,9 +503,10 @@
             if (e.target === this) closeModal();
         });
 
-        // 页面加载时检查是否已登录
-        if (localStorage.getItem('xuexitong_loggedin') === 'true') {
-            loadHomework();
+        // 页面加载时恢复 API Key
+        const savedApiKey = localStorage.getItem('moonshot_api_key');
+        if (savedApiKey) {
+            document.getElementById('apiKey').value = savedApiKey;
         }
     </script>
 </body>
