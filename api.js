@@ -3,7 +3,7 @@
  */
 
 // API 基础 URL
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'https://xuexitong-api.woaichixiaodangao.workers.dev';
 
 // 存储 sessionId
 function getSessionId() {
