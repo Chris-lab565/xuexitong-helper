@@ -53,7 +53,7 @@ function getXuexitongCookie() {
                 window.removeEventListener('message', handler);
                 resolve(event.data.cookie);
             }
-        }, { once: true });
+        });
     });
 }
 
@@ -85,7 +85,7 @@ async function getHomeworkViaExtension() {
                     reject(new Error(event.data.error || '获取作业失败'));
                 }
             }
-        }, { once: true });
+        });
     });
 }
 
@@ -118,7 +118,7 @@ async function getQuestionsViaExtension(url) {
                     reject(new Error(event.data.error || '获取题目失败'));
                 }
             }
-        }, { once: true });
+        });
     });
 }
 
