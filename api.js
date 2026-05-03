@@ -38,8 +38,37 @@ window.addEventListener('message', (event) => {
     }
 });
 
+// 从扩展 storage 获取 Cookie（备用方案）
+function getCookieFromStorage() {
+    return new Promise((resolve) => {
+        if (typeof chrome === 'undefined' || !chrome.storage) {
+            resolve(null);
+            return;
+        }
+        
+        chrome.storage.local.get(['xuexitongCookie', 'timestamp'], (result) => {
+            if (result.xuexitongCookie && result.timestamp) {
+                // 检查 Cookie 是否过期（30分钟内有效）
+                const age = Date.now() - result.timestamp;
+                if (age < 30 * 60 * 1000) {
+                    resolve(result.xuexitongCookie);
+                    return;
+                }
+            }
+            resolve(null);
+        });
+    });
+}
+
 // 获取学习通 Cookie（通过扩展）
-function getXuexitongCookie() {
+async function getXuexitongCookie() {
+    // 先尝试从 storage 获取（插件已存储）
+    const cookieFromStorage = await getCookieFromStorage();
+    if (cookieFromStorage) {
+        return cookieFromStorage;
+    }
+    
+    // 备用：通过 postMessage 向内容脚本请求
     return new Promise((resolve) => {
         window.postMessage({ type: 'XUEXITONG_HELPER_GET_COOKIE' }, '*');
         
