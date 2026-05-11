@@ -1,26 +1,22 @@
 /**
- * 学习通作业助手 - 前端 API 封装
- * 使用浏览器扩展绕过 CORS
+ * 学习通作业助手 - 前端 API 封装 v1.1.0
+ * 通过浏览器扩展获取 Cookie 并代理 API 请求
  */
 
 // 检查扩展是否安装
 function checkExtension() {
     return new Promise((resolve) => {
-        // 先检查是否已经收到扩展安装信号
         if (window.xuexitongExtensionInstalled) {
             resolve(true);
             return;
         }
-        
-        // 发送 ping 请求
+
         window.postMessage({ type: 'XUEXITONG_HELPER_PING' }, '*');
-        
-        const timeout = setTimeout(() => {
-            resolve(false);
-        }, 2000);
-        
+
+        const timeout = setTimeout(() => resolve(false), 2000);
+
         window.addEventListener('message', function handler(event) {
-            if (event.data.type === 'XUEXITONG_HELPER_PONG' || 
+            if (event.data.type === 'XUEXITONG_HELPER_PONG' ||
                 event.data.type === 'XUEXITONG_HELPER_EXTENSION_INSTALLED') {
                 clearTimeout(timeout);
                 window.removeEventListener('message', handler);
@@ -38,79 +34,94 @@ window.addEventListener('message', (event) => {
     }
 });
 
-// 从扩展 storage 获取 Cookie（备用方案）
+// 从扩展 storage 读取持久化的 Cookie（v1.1.0 扩展在点"打开应用"时保存）
 function getCookieFromStorage() {
     return new Promise((resolve) => {
         if (typeof chrome === 'undefined' || !chrome.storage) {
+            console.log('[api.js] chrome.storage 不可用，使用 postMessage 方案');
             resolve(null);
             return;
         }
-        
-        chrome.storage.local.get(['xuexitongCookie', 'timestamp'], (result) => {
-            if (result.xuexitongCookie && result.timestamp) {
-                // 检查 Cookie 是否过期（30分钟内有效）
-                const age = Date.now() - result.timestamp;
+
+        chrome.storage.local.get(['xuexitongCookie', 'xuexitongTime'], (result) => {
+            if (result.xuexitongCookie && result.xuexitongTime) {
+                const age = Date.now() - result.xuexitongTime;
+                console.log('[api.js] storage Cookie 年龄:', Math.floor(age / 1000), '秒');
                 if (age < 30 * 60 * 1000) {
+                    console.log('[api.js] ✅ 使用 storage 中的 Cookie');
                     resolve(result.xuexitongCookie);
                     return;
                 }
+                console.log('[api.js] ⚠️ storage Cookie 已过期');
             }
             resolve(null);
         });
     });
 }
 
-// 获取学习通 Cookie（通过扩展）
+// 获取学习通 Cookie（优先 storage → postMessage chain → background chrome.cookies.getAll）
 async function getXuexitongCookie() {
-    // 先尝试从 storage 获取（插件已存储）
+    console.log('[api.js] 开始获取 Cookie...');
+
+    // 方案1：从 chrome.storage.local 读取（popup "打开应用"时写入）
     const cookieFromStorage = await getCookieFromStorage();
     if (cookieFromStorage) {
+        console.log('[api.js] Cookie 来源: storage.local');
         return cookieFromStorage;
     }
-    
-    // 备用：通过 postMessage 向内容脚本请求
+
+    // 方案2：通过 postMessage → injected.js → content.js → background.js
+    console.log('[api.js] 尝试通过 postMessage 获取 Cookie...');
     return new Promise((resolve) => {
         window.postMessage({ type: 'XUEXITONG_HELPER_GET_COOKIE' }, '*');
-        
+
         const timeout = setTimeout(() => {
+            console.log('[api.js] ❌ Cookie 获取超时');
             resolve(null);
-        }, 3000);
-        
+        }, 5000);
+
         window.addEventListener('message', function handler(event) {
             if (event.data.type === 'XUEXITONG_HELPER_COOKIE_RESPONSE') {
                 clearTimeout(timeout);
                 window.removeEventListener('message', handler);
-                resolve(event.data.cookie);
+                const cookie = event.data.cookie;
+                console.log('[api.js] Cookie 来源: postMessage, 长度:', cookie ? cookie.length : 0,
+                    ', uid:', event.data.uid || '未知');
+                resolve(cookie);
             }
         });
     });
 }
 
-// 获取作业列表（通过扩展）
+// 获取作业列表（通过扩展代理）
 async function getHomeworkViaExtension() {
     const cookie = await getXuexitongCookie();
     if (!cookie) {
-        throw new Error('无法获取学习通 Cookie，请确保已安装扩展并登录学习通');
+        throw new Error('无法获取学习通 Cookie。\n\n请确保：\n1. 已安装最新版浏览器扩展\n2. 已登录学习通官网 (mooc1.chaoxing.com)\n3. 点击扩展图标 → "刷新 Cookie" → "打开应用"');
     }
-    
+
+    console.log('[api.js] 请求作业列表，Cookie 长度:', cookie.length);
+
     return new Promise((resolve, reject) => {
-        window.postMessage({ 
+        window.postMessage({
             type: 'XUEXITONG_HELPER_FETCH_HOMEWORK',
-            cookie 
+            cookie
         }, '*');
-        
+
         const timeout = setTimeout(() => {
-            reject(new Error('请求超时'));
-        }, 10000);
-        
+            reject(new Error('请求超时（15秒）。请检查扩展是否正常运行，或尝试刷新页面。'));
+        }, 15000);
+
         window.addEventListener('message', function handler(event) {
             if (event.data.type === 'XUEXITONG_HELPER_HOMEWORK_RESPONSE') {
                 clearTimeout(timeout);
                 window.removeEventListener('message', handler);
-                
+
                 if (event.data.success) {
+                    console.log('[api.js] ✅ 作业获取成功，数量:', event.data.data?.list?.length || 0);
                     resolve(event.data.data);
                 } else {
+                    console.error('[api.js] ❌ 作业获取失败:', event.data.error);
                     reject(new Error(event.data.error || '获取作业失败'));
                 }
             }
@@ -118,29 +129,27 @@ async function getHomeworkViaExtension() {
     });
 }
 
-// 获取题目（通过扩展）
+// 获取题目（通过扩展代理）
 async function getQuestionsViaExtension(url) {
     const cookie = await getXuexitongCookie();
     if (!cookie) {
         throw new Error('无法获取学习通 Cookie');
     }
-    
+
     return new Promise((resolve, reject) => {
-        window.postMessage({ 
+        window.postMessage({
             type: 'XUEXITONG_HELPER_FETCH_QUESTIONS',
             cookie,
             url
         }, '*');
-        
-        const timeout = setTimeout(() => {
-            reject(new Error('请求超时'));
-        }, 10000);
-        
+
+        const timeout = setTimeout(() => reject(new Error('获取题目超时')), 15000);
+
         window.addEventListener('message', function handler(event) {
             if (event.data.type === 'XUEXITONG_HELPER_QUESTIONS_RESPONSE') {
                 clearTimeout(timeout);
                 window.removeEventListener('message', handler);
-                
+
                 if (event.data.success) {
                     resolve(event.data.data);
                 } else {
@@ -162,45 +171,41 @@ async function generateAnswerWithMoonshot(question, apiKey) {
         body: JSON.stringify({
             model: 'kimi-k2.5',
             messages: [
-                { 
-                    role: 'system', 
-                    content: '你是一个学习助手，请根据题目给出简洁准确的答案。直接给出答案，不要解释。' 
+                {
+                    role: 'system',
+                    content: '你是一个学习助手，请根据题目给出简洁准确的答案。直接给出答案，不要解释。'
                 },
                 { role: 'user', content: question }
             ],
             temperature: 0.3
         })
     });
-    
+
     if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error?.message || 'AI 请求失败');
     }
-    
+
     const data = await response.json();
     return data.choices[0].message.content;
 }
 
-// API 方法
+// 对外暴露的 API
 const api = {
-    // 检查扩展
     checkExtension,
-    
-    // 获取作业列表
+
     async getHomework() {
         return getHomeworkViaExtension();
     },
-    
-    // 获取题目
+
     async getQuestions(workId, doUrl) {
         return getQuestionsViaExtension(doUrl);
     },
-    
-    // 生成 AI 答案
+
     async generateAnswer(question, apiKey) {
         return generateAnswerWithMoonshot(question, apiKey);
     },
 };
 
-// 导出
 window.api = api;
+console.log('[api.js] API 已加载 v1.1.0');

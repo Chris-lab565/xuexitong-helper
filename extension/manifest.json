@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "学习通助手 - Cookie获取器",
+  "version": "1.1.0",
+  "description": "帮助学习通作业助手获取登录Cookie",
+  "permissions": [
+    "cookies",
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "*://*.chaoxing.com/*",
+    "*://*.xuexitong.com/*",
+    "*://*.github.io/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.chaoxing.com/*",
+        "*://*.xuexitong.com/*",
+        "*://*.github.io/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["injected.js"],
+      "matches": ["*://*.chaoxing.com/*", "*://*.xuexitong.com/*", "*://*.github.io/*"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "学习通助手"
+  }
+}

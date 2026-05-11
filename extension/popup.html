@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学习通助手</title>
+    <style>
+        body {
+            width: 300px;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            font-size: 18px;
+            margin: 0;
+            color: #333;
+        }
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .status.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+        }
+        .status.warning {
+            background: #fff3e0;
+            color: #e65100;
+        }
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        .btn:hover {
+            opacity: 0.9;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .info {
+            font-size: 12px;
+            color: #666;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        .cookie-preview {
+            font-size: 11px;
+            color: #999;
+            word-break: break-all;
+            max-height: 60px;
+            overflow: hidden;
+            margin-top: 10px;
+            padding: 8px;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎓 学习通助手</h1>
+    </div>
+    
+    <div id="status" class="status warning">
+        正在检查...
+    </div>
+    
+    <button id="refreshBtn" class="btn">刷新 Cookie</button>
+    <button id="openAppBtn" class="btn">打开应用</button>
+    
+    <div id="cookiePreview" class="cookie-preview" style="display: none;"></div>
+    
+    <div class="info">
+        <p>💡 使用说明：</p>
+        <p>1. 确保已登录学习通官网</p>
+        <p>2. 点击"刷新 Cookie"获取最新凭证</p>
+        <p>3. 点击"打开应用"查看作业</p>
+    </div>
+    
+    <script src="popup.js"></script>
+</body>
+</html>
