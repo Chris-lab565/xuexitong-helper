@@ -1,5 +1,5 @@
 // 学习通助手 - 后台脚本 (Service Worker)
-// v1.1.1 - 添加 Referer/UA 请求头，增强错误处理
+// v1.1.2 - 增强日志、Cookie DOM 共享、调试面板
 
 const STORAGE_KEY = 'xuexitongCookie';
 const STORAGE_UID_KEY = 'xuexitongUid';
@@ -8,6 +8,7 @@ const COOKIE_EXPIRY_MS = 30 * 60 * 1000;
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
+// 从浏览器 Cookie 存储中获取所有学习通相关 Cookie（含 HttpOnly）
 async function getAllChaoxingCookies() {
     const domains = [
         'chaoxing.com',
@@ -37,6 +38,7 @@ async function getAllChaoxingCookies() {
     return { cookie: cookieString, uid, count: allCookies.size };
 }
 
+// 持久化 Cookie 到 storage.local
 async function persistCookie(cookie, uid) {
     await chrome.storage.local.set({
         [STORAGE_KEY]: cookie,
@@ -45,6 +47,7 @@ async function persistCookie(cookie, uid) {
     });
 }
 
+// 从 storage.local 读取持久化的 Cookie
 async function getStoredCookie() {
     const result = await chrome.storage.local.get([STORAGE_KEY, STORAGE_UID_KEY, STORAGE_TIME_KEY]);
     if (result[STORAGE_KEY] && result[STORAGE_TIME_KEY]) {
@@ -56,6 +59,7 @@ async function getStoredCookie() {
     return { cookie: null, uid: null, fresh: false };
 }
 
+// 创建标准请求头
 function buildHeaders(cookie, extra = {}) {
     return {
         'Cookie': cookie,
@@ -66,6 +70,7 @@ function buildHeaders(cookie, extra = {}) {
     };
 }
 
+// 处理消息
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     console.log('[Background] 收到消息:', request.action);
 
@@ -159,9 +164,11 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     }
 });
 
+// 获取完整作业列表
 async function fetchHomeworkList(cookie) {
     console.log('[Background] 开始获取课程列表...');
 
+    // 步骤1：获取课程列表
     const coursesResponse = await fetch(
         'https://mooc1-api.chaoxing.com/mooc-ans/visit/courselistdata',
         {
@@ -181,6 +188,7 @@ async function fetchHomeworkList(cookie) {
     const coursesText = await coursesResponse.text();
     console.log('[Background] 课程列表响应长度:', coursesText.length, '前200字符:', coursesText.substring(0, 200));
 
+    // 检查是否被重定向到登录页
     if (coursesText.includes('登录') && coursesText.includes('password') && coursesText.length < 5000) {
         throw new Error('Cookie 已过期，请重新登录学习通并刷新 Cookie');
     }
@@ -192,6 +200,7 @@ async function fetchHomeworkList(cookie) {
     console.log('[Background] 找到课程数量:', courseItems.length);
 
     if (courseItems.length === 0) {
+        // 尝试备用选择器
         const altItems = doc.querySelectorAll('[class*="course"]');
         console.log('[Background] 备用选择器找到元素:', altItems.length);
     }
@@ -260,7 +269,7 @@ async function fetchCourseHomework(cookie, courseId, classId, courseName) {
 }
 
 chrome.runtime.onInstalled.addListener(function() {
-    console.log('[学习通助手] 扩展已安装 v1.1.1');
+    console.log('[学习通助手] 扩展已安装 v1.1.2');
 });
 
-console.log('[学习通助手] Background Service Worker 已启动 v1.1.1');
+console.log('[学习通助手] Background Service Worker 已启动 v1.1.2');

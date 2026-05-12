@@ -1,10 +1,10 @@
-// 学习通助手 - 内容脚本 v1.1.0
+// 学习通助手 - 内容脚本 v1.1.2
 // 注入到所有匹配页面，桥接网页 ↔ 扩展后台
 
 (function() {
     'use strict';
 
-    console.log('[学习通助手] 内容脚本已加载:', location.href);
+    console.log('[学习通助手] 内容脚本已加载 v1.1.2 location:', location.href, 'readyState:', document.readyState);
 
     const hostname = location.hostname;
     const isXuexitongPage = hostname.includes('chaoxing.com') || hostname.includes('xuexitong.com');
@@ -12,7 +12,10 @@
 
     // 注入 injected.js 到页面上下文
     function injectScript() {
-        if (document.getElementById('xuexitong-injected')) return;
+        if (document.getElementById('xuexitong-injected')) {
+            console.log('[学习通助手] injected.js 已存在，跳过注入');
+            return;
+        }
 
         const script = document.createElement('script');
         script.id = 'xuexitong-injected';
@@ -22,17 +25,68 @@
             this.remove();
         };
         script.onerror = function(e) {
-            console.error('[学习通助手] injected.js 加载失败:', e);
+            console.error('[学习通助手] injected.js 加载失败:', e, '当前页面 CSP 可能阻止了扩展脚本');
         };
-        (document.head || document.documentElement).appendChild(script);
+        const target = document.head || document.documentElement;
+        if (target) {
+            target.appendChild(script);
+            console.log('[学习通助手] injected.js 已添加到', target.tagName);
+        } else {
+            console.error('[学习通助手] 无法注入 injected.js: document.head 和 documentElement 均不存在');
+            // 等待 DOM 就绪后重试
+            document.addEventListener('DOMContentLoaded', function() {
+                const retryTarget = document.head || document.documentElement;
+                if (retryTarget && !document.getElementById('xuexitong-injected')) {
+                    retryTarget.appendChild(script);
+                    console.log('[学习通助手] injected.js 重试注入到', retryTarget.tagName);
+                }
+            });
+        }
     }
     injectScript();
+
+    // ---- 主动获取 Cookie 并写入 DOM（仅 app 页面） ----
+    async function refreshDomCookie() {
+        if (!isAppPage) return;
+        console.log('[学习通助手] app 页面，主动获取 Cookie...');
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'getCookie' });
+            if (chrome.runtime.lastError) {
+                console.error('[学习通助手] 获取 Cookie 失败:', chrome.runtime.lastError.message);
+                document.body.dataset.xuexitongCookieError = chrome.runtime.lastError.message;
+                return;
+            }
+            const cookie = response?.cookie || '';
+            console.log('[学习通助手] Cookie 获取结果: count=' + (response?.count || 0) + ' len=' + cookie.length);
+            // 写入 DOM dataset，网页 JS 可直接读取
+            document.body.dataset.xuexitongCookie = cookie;
+            document.body.dataset.xuexitongUid = response?.uid || '';
+            document.body.dataset.xuexitongCookieReady = '1';
+            // 同时通知 injected.js（如果它已经加载）
+            window.postMessage({
+                type: 'XUEXITONG_HELPER_COOKIE_READY',
+                cookie: cookie,
+                uid: response?.uid || ''
+            }, '*');
+        } catch (err) {
+            console.error('[学习通助手] 获取 Cookie 异常:', err.message);
+            document.body.dataset.xuexitongCookieError = err.message;
+        }
+    }
+
+    // DOM 就绪后立即获取 Cookie
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', refreshDomCookie);
+    } else {
+        refreshDomCookie();
+    }
 
     // 监听来自 injected.js 的消息，转发给 background
     window.addEventListener('message', function(event) {
         if (event.source !== window) return;
 
         const type = event.data.type;
+        console.log('[学习通助手] 收到 postMessage:', type);
 
         // Ping
         if (type === 'XUEXITONG_HELPER_PING') {
@@ -42,8 +96,10 @@
 
         // 获取 Cookie（转发给 background，由 background 用 chrome.cookies.getAll 获取完整 Cookie）
         if (type === 'XUEXITONG_GET_COOKIE_FROM_BG') {
+            console.log('[学习通助手] 转发 Cookie 请求到 background...');
             chrome.runtime.sendMessage({ action: 'getCookie' }, function(response) {
                 if (chrome.runtime.lastError) {
+                    console.error('[学习通助手] getCookie 失败:', chrome.runtime.lastError.message);
                     window.postMessage({
                         type: 'XUEXITONG_COOKIE_FROM_BG_RESPONSE',
                         cookie: null,
@@ -51,6 +107,7 @@
                     }, '*');
                     return;
                 }
+                console.log('[学习通助手] getCookie 成功, count=' + (response?.count || 0));
                 window.postMessage({
                     type: 'XUEXITONG_COOKIE_FROM_BG_RESPONSE',
                     cookie: response?.cookie || null,
@@ -63,11 +120,13 @@
 
         // 获取作业（带 Cookie 转发给 background）
         if (type === 'XUEXITONG_FETCH_HOMEWORK_BG') {
+            console.log('[学习通助手] 转发作业请求到 background, cookie长度=' + (event.data.cookie || '').length);
             chrome.runtime.sendMessage({
                 action: 'fetchHomework',
                 cookie: event.data.cookie || ''
             }, function(response) {
                 if (chrome.runtime.lastError) {
+                    console.error('[学习通助手] fetchHomework 失败:', chrome.runtime.lastError.message);
                     window.postMessage({
                         type: 'XUEXITONG_HOMEWORK_BG_RESPONSE',
                         success: false,
@@ -75,6 +134,7 @@
                     }, '*');
                     return;
                 }
+                console.log('[学习通助手] fetchHomework 响应: success=' + (response?.success || false));
                 window.postMessage({
                     type: 'XUEXITONG_HOMEWORK_BG_RESPONSE',
                     success: response?.success || false,
@@ -87,12 +147,14 @@
 
         // 获取题目（带 Cookie 转发给 background）
         if (type === 'XUEXITONG_FETCH_QUESTIONS_BG') {
+            console.log('[学习通助手] 转发题目请求到 background, url=' + event.data.url);
             chrome.runtime.sendMessage({
                 action: 'fetchQuestions',
                 cookie: event.data.cookie || '',
                 url: event.data.url || ''
             }, function(response) {
                 if (chrome.runtime.lastError) {
+                    console.error('[学习通助手] fetchQuestions 失败:', chrome.runtime.lastError.message);
                     window.postMessage({
                         type: 'XUEXITONG_QUESTIONS_BG_RESPONSE',
                         success: false,

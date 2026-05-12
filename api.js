@@ -1,19 +1,54 @@
 /**
- * 学习通作业助手 - 前端 API 封装 v1.1.1
+ * 学习通作业助手 - 前端 API 封装 v1.1.2
  * 通过浏览器扩展获取 Cookie 并代理 API 请求
  */
+
+// 调试日志
+function debugLog(msg, data) {
+    console.log('[api.js] ' + msg, data || '');
+    // 更新页面状态指示器
+    const debugEl = document.getElementById('debugStatus');
+    if (debugEl) {
+        debugEl.textContent = msg;
+        debugEl.style.display = 'block';
+    }
+    // 同步更新步骤指示器
+    const stepMap = { '扩展': 'stepExtension', 'Cookie': 'stepCookie', '作业': 'stepHomework' };
+    for (const [key, stepId] of Object.entries(stepMap)) {
+        if (msg.includes(key)) {
+            const stepEl = document.getElementById(stepId);
+            if (stepEl) {
+                stepEl.textContent = msg;
+                stepEl.className = 'debug-step ' + (msg.startsWith('✅') ? 'success' : msg.startsWith('❌') ? 'error' : 'pending');
+            }
+        }
+    }
+}
 
 // 检查扩展是否安装
 function checkExtension() {
     return new Promise((resolve) => {
         if (window.xuexitongExtensionInstalled) {
+            debugLog('✅ 扩展已安装（缓存）');
             resolve(true);
             return;
         }
 
+        // 先检查 DOM 标记（由 content.js 设置）
+        if (document.body && document.body.dataset.xuexitongCookieReady === '1') {
+            debugLog('✅ 扩展已安装（DOM 标记）');
+            window.xuexitongExtensionInstalled = true;
+            resolve(true);
+            return;
+        }
+
+        debugLog('⏳ 检测扩展安装状态...');
         window.postMessage({ type: 'XUEXITONG_HELPER_PING' }, '*');
 
-        const timeout = setTimeout(() => resolve(false), 2000);
+        const timeout = setTimeout(() => {
+            debugLog('❌ 扩展未响应 PING（2秒超时）');
+            resolve(false);
+        }, 2000);
 
         window.addEventListener('message', function handler(event) {
             if (event.data.type === 'XUEXITONG_HELPER_PONG' ||
@@ -21,6 +56,7 @@ function checkExtension() {
                 clearTimeout(timeout);
                 window.removeEventListener('message', handler);
                 window.xuexitongExtensionInstalled = true;
+                debugLog('✅ 扩展 PING 响应成功');
                 resolve(true);
             }
         });
@@ -30,7 +66,13 @@ function checkExtension() {
 // 监听扩展安装信号
 window.addEventListener('message', (event) => {
     if (event.data.type === 'XUEXITONG_HELPER_EXTENSION_INSTALLED') {
+        debugLog('✅ 扩展已安装（主动通知）');
         window.xuexitongExtensionInstalled = true;
+    }
+    if (event.data.type === 'XUEXITONG_HELPER_COOKIE_READY') {
+        debugLog('✅ Cookie 就绪（content.js 主动推送）');
+        document.body.dataset.xuexitongCookie = event.data.cookie || '';
+        document.body.dataset.xuexitongCookieReady = '1';
     }
 });
 
@@ -63,19 +105,31 @@ function getCookieFromStorage() {
     });
 }
 
-// 获取学习通 Cookie
+// 获取学习通 Cookie（三层回退：DOM → storage → postMessage）
 async function getXuexitongCookie() {
+    // 方案0：从 DOM 读取（content.js 在页面加载时自动获取并写入）
+    if (document.body && document.body.dataset.xuexitongCookieReady === '1') {
+        const cookie = document.body.dataset.xuexitongCookie;
+        if (cookie) {
+            debugLog('✅ Cookie 从 DOM 读取成功 (长度=' + cookie.length + ')');
+            return cookie;
+        }
+    }
+
     // 方案1：chrome.storage.local（popup "打开应用"时写入，仅扩展上下文有效）
     const cookieFromStorage = await getCookieFromStorage();
     if (cookieFromStorage) {
+        debugLog('✅ Cookie 从 storage 读取成功');
         return cookieFromStorage;
     }
 
     // 方案2：postMessage → injected.js → content.js → background.js
+    debugLog('⏳ 通过 postMessage 获取 Cookie...');
     return new Promise((resolve) => {
         window.postMessage({ type: 'XUEXITONG_HELPER_GET_COOKIE' }, '*');
 
         const timeout = setTimeout(() => {
+            debugLog('❌ Cookie 获取超时（5秒）');
             resolve(null);
         }, 5000);
 
@@ -83,7 +137,13 @@ async function getXuexitongCookie() {
             if (event.data.type === 'XUEXITONG_HELPER_COOKIE_RESPONSE') {
                 clearTimeout(timeout);
                 window.removeEventListener('message', handler);
-                resolve(event.data.cookie);
+                const cookie = event.data.cookie;
+                if (cookie) {
+                    debugLog('✅ Cookie postMessage 获取成功 (长度=' + cookie.length + ')');
+                } else {
+                    debugLog('❌ Cookie postMessage 返回空');
+                }
+                resolve(cookie);
             }
         });
     });
@@ -104,6 +164,7 @@ async function getHomeworkViaExtension() {
         );
     }
 
+    debugLog('⏳ 获取作业列表...');
     return new Promise((resolve, reject) => {
         window.postMessage({
             type: 'XUEXITONG_HELPER_FETCH_HOMEWORK',
@@ -111,6 +172,7 @@ async function getHomeworkViaExtension() {
         }, '*');
 
         const timeout = setTimeout(() => {
+            debugLog('❌ 作业请求超时（15秒）');
             reject(new Error('请求超时（15秒）。请检查扩展是否正常运行，点击扩展图标确认 Cookie 状态。'));
         }, 15000);
 
@@ -120,8 +182,10 @@ async function getHomeworkViaExtension() {
                 window.removeEventListener('message', handler);
 
                 if (event.data.success) {
+                    debugLog('✅ 作业列表获取成功');
                     resolve(event.data.data);
                 } else {
+                    debugLog('❌ 作业获取失败: ' + (event.data.error || '未知错误'));
                     reject(new Error(event.data.error || '获取作业失败'));
                 }
             }
@@ -136,6 +200,7 @@ async function getQuestionsViaExtension(url) {
         throw new Error('无法获取学习通 Cookie');
     }
 
+    debugLog('⏳ 获取题目...');
     return new Promise((resolve, reject) => {
         window.postMessage({
             type: 'XUEXITONG_HELPER_FETCH_QUESTIONS',
@@ -208,3 +273,4 @@ const api = {
 };
 
 window.api = api;
+debugLog('✅ api.js v1.1.2 已加载');

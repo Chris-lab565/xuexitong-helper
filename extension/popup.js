@@ -1,4 +1,4 @@
-// 学习通助手 - 弹出窗口脚本 v1.1.0
+// 学习通助手 - 弹出窗口脚本 v1.1.2
 
 document.addEventListener('DOMContentLoaded', function() {
     const statusEl = document.getElementById('status');

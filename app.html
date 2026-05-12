@@ -96,6 +96,29 @@
             background: #f8d7da;
             color: #721c24;
         }
+        .debug-panel {
+            background: #1e1e2e;
+            color: #cdd6f4;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 13px;
+        }
+        .debug-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #89b4fa;
+        }
+        .debug-step {
+            padding: 4px 0;
+        }
+        .debug-step.success { color: #a6e3a1; }
+        .debug-step.error { color: #f38ba8; }
+        .debug-step.pending { color: #6c7086; }
     </style>
 </head>
 <body>
@@ -115,7 +138,7 @@
             <h3>🔌 请先安装浏览器扩展</h3>
             <p>本工具需要浏览器扩展才能获取学习通数据。</p>
             <ol>
-                <li>下载扩展文件：<a href="https://github.com/Chris-lab565/xuexitong-helper/releases/download/v1.1.1/extension-v1.1.1.zip" download>点击下载 v1.1.1</a></li>
+                <li>下载扩展文件：<a href="https://github.com/Chris-lab565/xuexitong-helper/releases/download/v1.1.2/extension-v1.1.2.zip" download>点击下载 v1.1.1</a></li>
                 <li>解压下载的 zip 文件</li>
                 <li>打开浏览器扩展管理页面：chrome://extensions/</li>
                 <li>开启「开发者模式」</li>
@@ -137,6 +160,19 @@
                 还没有 API Key？<a href="https://platform.moonshot.cn" target="_blank">点击注册 Moonshot</a>（新用户免费 15 元额度）
             </div>
             <div class="apikey-status" id="apiKeyStatus" style="display: none;"></div>
+        </div>
+
+        <!-- 调试状态面板 -->
+        <div class="debug-panel" id="debugPanel" style="display: none;">
+            <div class="debug-header">
+                <span>🔍 运行状态</span>
+                <span id="debugStatus" style="font-size: 12px;">初始化中...</span>
+            </div>
+            <div class="debug-steps" id="debugSteps">
+                <div class="debug-step pending" id="stepExtension">⏳ 检测扩展...</div>
+                <div class="debug-step pending" id="stepCookie">⏳ 获取 Cookie...</div>
+                <div class="debug-step pending" id="stepHomework">⏳ 获取作业...</div>
+            </div>
         </div>
 
         <!-- 登录区域 -->
@@ -219,22 +255,39 @@
         }
         checkAuth();
 
+        // 调试面板辅助函数
+        function showDebugPanel() {
+            document.getElementById('debugPanel').style.display = 'block';
+        }
+        function updateDebugStep(stepId, status, text) {
+            const el = document.getElementById(stepId);
+            if (el) {
+                el.textContent = text;
+                el.className = 'debug-step ' + status;
+            }
+        }
+
         // 检查扩展是否安装
         async function checkExtension() {
+            showDebugPanel();
+            updateDebugStep('stepExtension', 'pending', '⏳ 检测扩展...');
+
             const installed = await api.checkExtension();
             const statusEl = document.getElementById('extensionStatus');
             const noticeEl = document.getElementById('extensionNotice');
-            
+
             if (installed) {
                 statusEl.textContent = '✅ 扩展已安装';
                 statusEl.className = 'extension-status ok';
                 noticeEl.style.display = 'none';
+                updateDebugStep('stepExtension', 'success', '✅ 扩展已安装');
             } else {
                 statusEl.textContent = '❌ 扩展未安装';
                 statusEl.className = 'extension-status error';
                 noticeEl.style.display = 'block';
+                updateDebugStep('stepExtension', 'error', '❌ 扩展未安装 — 请检查扩展是否已加载');
             }
-            
+
             return installed;
         }
 
@@ -306,7 +359,12 @@
         async function connectXuexitong() {
             const btn = document.getElementById('connectBtn');
             const msgEl = document.getElementById('connectMessage');
-            
+
+            showDebugPanel();
+            updateDebugStep('stepExtension', 'pending', '⏳ 检测扩展...');
+            updateDebugStep('stepCookie', 'pending', '⏳ 获取 Cookie...');
+            updateDebugStep('stepHomework', 'pending', '⏳ 获取作业...');
+
             // 检查扩展
             const extensionInstalled = await checkExtension();
             if (!extensionInstalled) {
@@ -314,7 +372,7 @@
                 msgEl.className = 'message error';
                 return;
             }
-            
+
             // 检查 API Key
             const apiKey = localStorage.getItem('moonshot_api_key');
             if (!apiKey) {
@@ -323,16 +381,21 @@
                 document.getElementById('apiKey').focus();
                 return;
             }
-            
+
             btn.disabled = true;
             btn.textContent = '获取中...';
             msgEl.textContent = '';
-            
+
             try {
+                updateDebugStep('stepCookie', 'pending', '⏳ 获取 Cookie（DOM → storage → postMessage）...');
+                updateDebugStep('stepHomework', 'pending', '⏳ 等待 Cookie 就绪...');
                 await loadHomework();
+                updateDebugStep('stepCookie', 'success', '✅ Cookie 获取成功');
+                updateDebugStep('stepHomework', 'success', '✅ 作业列表加载成功');
                 msgEl.textContent = '获取成功！';
                 msgEl.className = 'message success';
             } catch (err) {
+                updateDebugStep('stepHomework', 'error', '❌ ' + err.message);
                 msgEl.textContent = '获取失败: ' + err.message;
                 msgEl.className = 'message error';
             } finally {
