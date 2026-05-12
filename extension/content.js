@@ -46,28 +46,49 @@
     injectScript();
 
     // ---- 主动获取 Cookie 并写入 DOM（仅 app 页面） ----
+    function setDomCookie(cookie, uid) {
+        document.body.dataset.xuexitongCookie = cookie;
+        document.body.dataset.xuexitongUid = uid || '';
+        document.body.dataset.xuexitongCookieReady = '1';
+        window.postMessage({
+            type: 'XUEXITONG_HELPER_COOKIE_READY',
+            cookie: cookie,
+            uid: uid || ''
+        }, '*');
+    }
+
     async function refreshDomCookie() {
         if (!isAppPage) return;
         console.log('[学习通助手] app 页面，主动获取 Cookie...');
+
+        // 方案A：从 URL hash 读取（popup 直接传递，无需异步通信）
+        const hash = window.location.hash.substring(1);
+        if (hash && hash.includes('xtcookie=')) {
+            const params = new URLSearchParams(hash);
+            const hashCookie = params.get('xtcookie');
+            const hashUid = params.get('xtuid');
+            if (hashCookie) {
+                console.log('[学习通助手] Cookie 从 URL hash 读取成功, len=' + hashCookie.length);
+                setDomCookie(hashCookie, hashUid);
+                // 清理 URL 中的敏感数据
+                if (window.history && window.history.replaceState) {
+                    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+                }
+                return;
+            }
+        }
+
+        // 方案B：通过 Service Worker 获取
         try {
             const response = await chrome.runtime.sendMessage({ action: 'getCookie' });
             if (chrome.runtime.lastError) {
-                console.error('[学习通助手] 获取 Cookie 失败:', chrome.runtime.lastError.message);
+                console.error('[学习通助手] getCookie 失败:', chrome.runtime.lastError.message);
                 document.body.dataset.xuexitongCookieError = chrome.runtime.lastError.message;
                 return;
             }
             const cookie = response?.cookie || '';
             console.log('[学习通助手] Cookie 获取结果: count=' + (response?.count || 0) + ' len=' + cookie.length);
-            // 写入 DOM dataset，网页 JS 可直接读取
-            document.body.dataset.xuexitongCookie = cookie;
-            document.body.dataset.xuexitongUid = response?.uid || '';
-            document.body.dataset.xuexitongCookieReady = '1';
-            // 同时通知 injected.js（如果它已经加载）
-            window.postMessage({
-                type: 'XUEXITONG_HELPER_COOKIE_READY',
-                cookie: cookie,
-                uid: response?.uid || ''
-            }, '*');
+            setDomCookie(cookie, response?.uid || '');
         } catch (err) {
             console.error('[学习通助手] 获取 Cookie 异常:', err.message);
             document.body.dataset.xuexitongCookieError = err.message;
