@@ -105,14 +105,41 @@ function getCookieFromStorage() {
     });
 }
 
-// 获取学习通 Cookie（三层回退：DOM → storage → postMessage）
+// 获取学习通 Cookie（四层回退：DOM轮询 → DOM监听 → storage → postMessage）
 async function getXuexitongCookie() {
-    // 方案0：从 DOM 读取（content.js 在页面加载时自动获取并写入）
-    if (document.body && document.body.dataset.xuexitongCookieReady === '1') {
-        const cookie = document.body.dataset.xuexitongCookie;
-        if (cookie) {
-            debugLog('✅ Cookie 从 DOM 读取成功 (长度=' + cookie.length + ')');
-            return cookie;
+    // 方案0：轮询等待 DOM Cookie（content.js 异步获取，可能需要几百毫秒）
+    debugLog('⏳ 等待 DOM Cookie 就绪...');
+    for (let i = 0; i < 25; i++) {
+        if (document.body && document.body.dataset.xuexitongCookieReady === '1') {
+            const cookie = document.body.dataset.xuexitongCookie;
+            if (cookie) {
+                debugLog('✅ Cookie 从 DOM 读取成功 (长度=' + cookie.length + ')');
+                return cookie;
+            }
+            // DOM 标记就绪但 cookie 为空，content.js 获取失败 → 跳出轮询
+            const domErr = document.body.dataset.xuexitongCookieError;
+            debugLog('⚠️ DOM Cookie 就绪但为空' + (domErr ? ' (错误: ' + domErr + ')' : ''));
+            break;
+        }
+        await new Promise(r => setTimeout(r, 200));
+    }
+
+    // 方案0b：如果还没就绪，监听 COOKIE_READY 事件（content.js 主动推送）
+    if (document.body && document.body.dataset.xuexitongCookieReady !== '1') {
+        debugLog('⏳ DOM Cookie 未就绪，等待推送事件...');
+        const cookieFromEvent = await new Promise((resolve) => {
+            const timeout = setTimeout(() => resolve(null), 3000);
+            window.addEventListener('message', function handler(event) {
+                if (event.data.type === 'XUEXITONG_HELPER_COOKIE_READY') {
+                    clearTimeout(timeout);
+                    window.removeEventListener('message', handler);
+                    resolve(event.data.cookie || null);
+                }
+            });
+        });
+        if (cookieFromEvent) {
+            debugLog('✅ Cookie 从推送事件获取成功 (长度=' + cookieFromEvent.length + ')');
+            return cookieFromEvent;
         }
     }
 
