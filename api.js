@@ -105,9 +105,30 @@ function getCookieFromStorage() {
     });
 }
 
-// 获取学习通 Cookie（四层回退：DOM轮询 → DOM监听 → storage → postMessage）
+// 从 URL hash 读取 Cookie（弹窗直接通过 URL 传递，最可靠）
+function getCookieFromHash() {
+    const hash = window.location.hash.substring(1); // 去掉 #
+    const params = new URLSearchParams(hash);
+    const cookie = params.get('xtcookie');
+    if (cookie) {
+        debugLog('✅ Cookie 从 URL hash 读取成功 (长度=' + cookie.length + ')');
+        // 清理 URL 中的敏感 Cookie（不刷新页面）
+        if (window.history && window.history.replaceState) {
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+    }
+    return cookie;
+}
+
+// 获取学习通 Cookie（五层回退：URL hash → DOM轮询 → DOM监听 → storage → postMessage）
 async function getXuexitongCookie() {
-    // 方案0：轮询等待 DOM Cookie（content.js 异步获取，可能需要几百毫秒）
+    // 方案0：从 URL hash 读取（弹窗直接传递，绕过内容脚本）
+    const cookieFromHash = getCookieFromHash();
+    if (cookieFromHash) {
+        return cookieFromHash;
+    }
+
+    // 方案1：轮询等待 DOM Cookie（content.js 异步获取，可能需要几百毫秒）
     debugLog('⏳ 等待 DOM Cookie 就绪...');
     for (let i = 0; i < 25; i++) {
         if (document.body && document.body.dataset.xuexitongCookieReady === '1') {

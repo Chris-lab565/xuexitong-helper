@@ -82,20 +82,24 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // 打开应用：先保存 Cookie 到 storage.local，再打开助手网页
+    // 打开应用：通过 URL hash 传递 Cookie（绕过内容脚本通信问题）
     openAppBtn.addEventListener('click', function() {
         statusEl.textContent = '⏳ 获取 Cookie...';
 
         chrome.runtime.sendMessage({ action: 'getCookie' }, function(response) {
-            // 保存到 storage.local，供助手网页 api.js 读取
+            const cookie = response?.cookie || '';
+            const uid = response?.uid || '';
+
+            // 保存到 storage.local 作为备份
             chrome.storage.local.set({
-                xuexitongCookie: response?.cookie || '',
-                xuexitongUid: response?.uid || '',
+                xuexitongCookie: cookie,
+                xuexitongUid: uid,
                 xuexitongTime: Date.now()
             }, function() {
-                // 打开助手网页
+                // 通过 URL hash 直接传递 Cookie（绕过内容脚本注入问题）
+                const hash = cookie ? ('xtcookie=' + encodeURIComponent(cookie) + '&xtuid=' + encodeURIComponent(uid)) : '';
                 chrome.tabs.create({
-                    url: 'https://chris-lab565.github.io/xuexitong-helper/app.html',
+                    url: 'https://chris-lab565.github.io/xuexitong-helper/app.html#' + hash,
                     active: true
                 });
             });
