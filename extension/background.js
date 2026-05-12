@@ -1,5 +1,5 @@
 // 学习通助手 - 后台脚本 (Service Worker)
-// v1.1.2 - 增强日志、Cookie DOM 共享、调试面板
+// v1.1.3 - 多域名+URL双方案Cookie获取，详细诊断日志
 
 const STORAGE_KEY = 'xuexitongCookie';
 const STORAGE_UID_KEY = 'xuexitongUid';
@@ -10,23 +10,59 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 
 // 从浏览器 Cookie 存储中获取所有学习通相关 Cookie（含 HttpOnly）
 async function getAllChaoxingCookies() {
+    // 方案A：按域名批量获取
     const domains = [
         'chaoxing.com',
         '.chaoxing.com',
+        'passport.chaoxing.com',
+        'passport2.chaoxing.com',
+        'mooc1.chaoxing.com',
         'mooc1-api.chaoxing.com',
         'i.mooc.chaoxing.com',
         'mooc1-1.chaoxing.com',
+        'ua.chaoxing.com',
+        'sso.chaoxing.com',
+        'auth.chaoxing.com',
         'xuexitong.com',
-        '.xuexitong.com'
+        '.xuexitong.com',
+        'passport.xuexitong.com'
     ];
 
     const allCookies = new Map();
+    const domainResults = [];
 
     for (const domain of domains) {
         try {
             const cookies = await chrome.cookies.getAll({ domain });
+            domainResults.push({ domain, count: cookies.length, names: cookies.map(c => c.name).join(',') });
             cookies.forEach(c => allCookies.set(c.name, c.value));
-        } catch (e) {}
+        } catch (e) {
+            domainResults.push({ domain, count: 0, error: e.message });
+        }
+    }
+
+    console.log('[Background] Cookie 各域名查询结果:', JSON.stringify(domainResults));
+    console.log('[Background] 去重后总 Cookie 数:', allCookies.size, 'keys:', Array.from(allCookies.keys()).join(','));
+
+    // 方案B：如果方案A结果太少，用 URL 方式补充获取
+    if (allCookies.size < 3) {
+        console.log('[Background] 方案A获取Cookie不足，尝试方案B（URL方式）...');
+        const urls = [
+            'https://mooc1.chaoxing.com',
+            'https://passport.chaoxing.com',
+            'https://i.mooc.chaoxing.com',
+            'https://www.xuexitong.com'
+        ];
+        for (const url of urls) {
+            try {
+                const cookies = await chrome.cookies.getAll({ url });
+                console.log('[Background] URL方式', url, '获取到', cookies.length, '项:', cookies.map(c => c.name).join(','));
+                cookies.forEach(c => allCookies.set(c.name, c.value));
+            } catch (e) {
+                console.log('[Background] URL方式', url, '失败:', e.message);
+            }
+        }
+        console.log('[Background] 方案B后总 Cookie 数:', allCookies.size);
     }
 
     const cookieString = Array.from(allCookies.entries())
@@ -269,7 +305,7 @@ async function fetchCourseHomework(cookie, courseId, classId, courseName) {
 }
 
 chrome.runtime.onInstalled.addListener(function() {
-    console.log('[学习通助手] 扩展已安装 v1.1.2');
+    console.log('[学习通助手] 扩展已安装 v1.1.3');
 });
 
-console.log('[学习通助手] Background Service Worker 已启动 v1.1.2');
+console.log('[学习通助手] Background Service Worker 已启动 v1.1.3');
