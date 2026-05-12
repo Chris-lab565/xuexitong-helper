@@ -1,5 +1,5 @@
 // 学习通助手 - 后台脚本 (Service Worker)
-// v1.1.3 - 多域名+URL双方案Cookie获取，详细诊断日志
+// v1.1.6 - 多策略作业获取：课程API+主页+已结束+我的作业页面
 
 const STORAGE_KEY = 'xuexitongCookie';
 const STORAGE_UID_KEY = 'xuexitongUid';
@@ -200,72 +200,209 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     }
 });
 
-// 获取完整作业列表
-async function fetchHomeworkList(cookie) {
-    console.log('[Background] 开始获取课程列表...');
+// 从 HTML 中提取 courseId/classId
+function extractCourseIds(html, cookie) {
+    const results = [];
+    // 多种正则模式匹配 courseId 和 classId
+    const patterns = [
+        /courseId=(\d+).*?classId=(\d+)/g,
+        /classId=(\d+).*?courseId=(\d+)/g,
+        /"courseId"\s*:\s*(\d+).*?"classId"\s*:\s*(\d+)/g,
+        /"classId"\s*:\s*(\d+).*?"courseId"\s*:\s*(\d+)/g,
+    ];
 
-    // 步骤1：获取课程列表
-    const coursesResponse = await fetch(
-        'https://mooc1-api.chaoxing.com/mooc-ans/visit/courselistdata',
-        {
-            method: 'POST',
-            headers: buildHeaders(cookie, {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Referer': 'https://mooc1.chaoxing.com/mooc2-ans/mycourse/index?courseType=1'
-            }),
-            body: 'courseType=1&page=1&pageSize=100'
-        }
-    );
-
-    if (!coursesResponse.ok) {
-        throw new Error(`课程列表请求失败（HTTP ${coursesResponse.status}）。请确认已登录学习通。`);
-    }
-
-    const coursesText = await coursesResponse.text();
-    console.log('[Background] 课程列表响应长度:', coursesText.length, '前200字符:', coursesText.substring(0, 200));
-
-    // 检查是否被重定向到登录页
-    if (coursesText.includes('登录') && coursesText.includes('password') && coursesText.length < 5000) {
-        throw new Error('Cookie 已过期，请重新登录学习通并刷新 Cookie');
-    }
-
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(coursesText, 'text/html');
-    const courseItems = doc.querySelectorAll('.course-item');
-
-    console.log('[Background] 找到课程数量:', courseItems.length);
-
-    if (courseItems.length === 0) {
-        // 尝试备用选择器
-        const altItems = doc.querySelectorAll('[class*="course"]');
-        console.log('[Background] 备用选择器找到元素:', altItems.length);
-    }
-
-    const homeworkList = [];
-
-    for (const item of courseItems) {
-        const courseName = item.querySelector('.course-name')?.textContent?.trim()
-                        || item.querySelector('.courseName')?.textContent?.trim()
-                        || item.querySelector('[class*="course-name"]')?.textContent?.trim()
-                        || '';
-        const courseLink = item.querySelector('a')?.href || '';
-
-        const match = courseLink.match(/courseId=(\d+).*?classId=(\d+)/);
-        if (match) {
+    for (const pattern of patterns) {
+        let match;
+        pattern.lastIndex = 0;
+        while ((match = pattern.exec(html)) !== null) {
             const courseId = match[1];
             const classId = match[2];
-
-            console.log('[Background] 获取课程作业:', courseName, 'courseId:', courseId);
-            const hwList = await fetchCourseHomework(cookie, courseId, classId, courseName);
-            homeworkList.push(...hwList);
+            // 去重
+            const key = `${courseId}_${classId}`;
+            if (!results.find(r => `${r.courseId}_${r.classId}` === key)) {
+                results.push({ courseId, classId });
+            }
         }
+    }
+    return results;
+}
+
+// 获取完整作业列表（多策略）
+async function fetchHomeworkList(cookie) {
+    console.log('[Background] === 开始获取作业列表 ===');
+
+    // === 策略1：课程列表 API（HTML） ===
+    let courseIds = [];
+    try {
+        console.log('[Background] 策略1: 获取课程列表 API...');
+        const coursesResponse = await fetch(
+            'https://mooc1-api.chaoxing.com/mooc-ans/visit/courselistdata',
+            {
+                method: 'POST',
+                headers: buildHeaders(cookie, {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Referer': 'https://mooc1.chaoxing.com/mooc2-ans/mycourse/index?courseType=1'
+                }),
+                body: 'courseType=1&page=1&pageSize=100'
+            }
+        );
+
+        if (coursesResponse.ok) {
+            const coursesText = await coursesResponse.text();
+            console.log('[Background] 课程列表长度:', coursesText.length, '前300字符:', coursesText.substring(0, 300));
+
+            if (coursesText.includes('登录') && coursesText.includes('password') && coursesText.length < 5000) {
+                throw new Error('Cookie 已过期，请重新登录学习通并刷新 Cookie');
+            }
+
+            courseIds = extractCourseIds(coursesText);
+            console.log('[Background] 策略1 提取到 courseId/classId:', courseIds.length, '对');
+        } else {
+            console.log('[Background] 策略1 失败: HTTP', coursesResponse.status);
+        }
+    } catch (err) {
+        console.log('[Background] 策略1 异常:', err.message);
+    }
+
+    // === 策略2：我的课程主页（HTML，提取链接） ===
+    if (courseIds.length === 0) {
+        try {
+            console.log('[Background] 策略2: 获取我的课程主页...');
+            const mycourseResponse = await fetch(
+                'https://mooc1.chaoxing.com/mooc2-ans/mycourse/index?courseType=1',
+                {
+                    headers: buildHeaders(cookie, {
+                        'Referer': 'https://mooc1.chaoxing.com'
+                    })
+                }
+            );
+            if (mycourseResponse.ok) {
+                const html = await mycourseResponse.text();
+                console.log('[Background] 课程主页长度:', html.length, '前300字符:', html.substring(0, 300));
+                courseIds = extractCourseIds(html);
+                console.log('[Background] 策略2 提取到 courseId/classId:', courseIds.length, '对');
+            } else {
+                console.log('[Background] 策略2 失败: HTTP', mycourseResponse.status);
+            }
+        } catch (err) {
+            console.log('[Background] 策略2 异常:', err.message);
+        }
+    }
+
+    // === 策略3：已结束课程 ===
+    if (courseIds.length === 0) {
+        try {
+            console.log('[Background] 策略3: 获取已结束课程列表...');
+            const endedResponse = await fetch(
+                'https://mooc1-api.chaoxing.com/mooc-ans/visit/courselistdata',
+                {
+                    method: 'POST',
+                    headers: buildHeaders(cookie, {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Referer': 'https://mooc1.chaoxing.com/mooc2-ans/mycourse/index?courseType=2'
+                    }),
+                    body: 'courseType=2&page=1&pageSize=100'
+                }
+            );
+            if (endedResponse.ok) {
+                const html = await endedResponse.text();
+                courseIds = extractCourseIds(html);
+                console.log('[Background] 策略3 提取到 courseId/classId:', courseIds.length, '对');
+            }
+        } catch (err) {
+            console.log('[Background] 策略3 异常:', err.message);
+        }
+    }
+
+    if (courseIds.length === 0) {
+        console.log('[Background] 所有策略均未找到课程。尝试直接获取作业页面...');
+        // 策略4：直接尝试"我的作业"页面，可能有不同的入口
+        return await fetchHomeworkFromStuWork(cookie);
+    }
+
+    // 对每个课程获取作业
+    const homeworkList = [];
+    for (const { courseId, classId } of courseIds) {
+        console.log('[Background] 获取课程作业: courseId=' + courseId + ' classId=' + classId);
+        const hwList = await fetchCourseHomework(cookie, courseId, classId);
+        homeworkList.push(...hwList);
+        // 限速：每两个请求之间稍等
+        await new Promise(r => setTimeout(r, 300));
     }
 
     console.log('[Background] 总共获取作业数量:', homeworkList.length);
     return { list: homeworkList };
 }
 
+// 策略4：从"我的作业"页面直接获取
+async function fetchHomeworkFromStuWork(cookie) {
+    try {
+        console.log('[Background] 策略4: 访问我的作业页面...');
+        const response = await fetch(
+            'https://mooc1.chaoxing.com/mooc-ans/work/stu-work',
+            {
+                headers: buildHeaders(cookie, {
+                    'Referer': 'https://mooc1.chaoxing.com'
+                })
+            }
+        );
+        if (!response.ok) {
+            return { list: [] };
+        }
+        const html = await response.text();
+        console.log('[Background] 作业页面长度:', html.length, '前500字符:', html.substring(0, 500));
+
+        // 尝试从页面提取作业数据（可能嵌入在 JS 变量中）
+        const homeworkList = [];
+
+        // 尝试匹配 JSON 数据
+        const jsonPatterns = [
+            /workList\s*[:=]\s*(\[[^\]]+\])/g,
+            /"workList"\s*:\s*(\[[^\]]*\])/g,
+            /"list"\s*:\s*(\[[^\]]*\{[^}]*\}[^\]]*\])/g,
+        ];
+
+        for (const pattern of jsonPatterns) {
+            let match;
+            while ((match = pattern.exec(html)) !== null) {
+                try {
+                    const parsed = JSON.parse(match[1]);
+                    if (Array.isArray(parsed)) {
+                        parsed.forEach(hw => {
+                            homeworkList.push({
+                                workId: hw.workId || hw.id || '',
+                                title: hw.title || hw.name || '',
+                                courseName: hw.courseName || '',
+                                status: hw.status === 1 ? 'done' : 'pending',
+                                endTime: hw.endTime || hw.deadline || '',
+                                submitUrl: hw.url || ''
+                            });
+                        });
+                    }
+                } catch (e) { /* JSON 解析失败，继续 */ }
+            }
+        }
+
+        // 也尝试从页面提取 courseId/classId 然后查作业
+        const courseIds = extractCourseIds(html);
+        console.log('[Background] 策略4 提取到 courseId:', courseIds.length, '对');
+
+        for (const { courseId, classId } of courseIds) {
+            const hwList = await fetchCourseHomework(cookie, courseId, classId);
+            homeworkList.push(...hwList);
+            await new Promise(r => setTimeout(r, 200));
+        }
+
+        console.log('[Background] 策略4 总共获取作业:', homeworkList.length);
+        return { list: homeworkList };
+    } catch (err) {
+        console.error('[Background] 策略4 失败:', err.message);
+        return { list: [] };
+    }
+}
+
 async function fetchCourseHomework(cookie, courseId, classId, courseName) {
+    const label = courseName || `课程${courseId}`;
     try {
         const response = await fetch(
             `https://mooc1-api.chaoxing.com/mooc-ans/work/getAllWork?courseId=${courseId}&classId=${classId}&page=1&pageSize=100`,
@@ -277,35 +414,38 @@ async function fetchCourseHomework(cookie, courseId, classId, courseName) {
         );
 
         if (!response.ok) {
-            console.error('[Background] 课程作业请求失败:', courseName, 'HTTP', response.status);
+            console.error('[Background] 课程作业请求失败:', label, 'HTTP', response.status);
             return [];
         }
 
         const data = await response.json();
-        console.log('[Background] 课程', courseName, '作业数:', data?.list?.length || 0);
+        console.log('[Background] 课程', label, '作业数:', data?.list?.length || 0);
+
+        // 如果 data 中有课程名，优先使用
+        const resolvedName = courseName || data?.courseName || data?.course?.name || '';
 
         if (data && data.list) {
             return data.list.map(hw => ({
                 ...hw,
-                courseName,
+                courseName: resolvedName,
                 courseId,
                 classId,
                 workId: hw.workId || hw.id,
                 title: hw.title || hw.name,
                 status: hw.status === 1 ? 'done' : 'pending',
                 endTime: hw.endTime || hw.deadline,
-                submitUrl: `https://mooc1.chaoxing.com/mooc-ans/work/doHomeWork?courseId=${courseId}&classId=${classId}&workId=${hw.workId || hw.id}`
+                submitUrl: hw.url || hw.submitUrl || `https://mooc1.chaoxing.com/mooc-ans/work/doHomeWork?courseId=${courseId}&classId=${classId}&workId=${hw.workId || hw.id}`
             }));
         }
         return [];
     } catch (err) {
-        console.error('[Background] 获取课程作业失败:', courseName, err.message);
+        console.error('[Background] 获取课程作业失败:', label, err.message);
         return [];
     }
 }
 
 chrome.runtime.onInstalled.addListener(function() {
-    console.log('[学习通助手] 扩展已安装 v1.1.3');
+    console.log('[学习通助手] 扩展已安装 v1.1.6');
 });
 
-console.log('[学习通助手] Background Service Worker 已启动 v1.1.3');
+console.log('[学习通助手] Background Service Worker 已启动 v1.1.6');
