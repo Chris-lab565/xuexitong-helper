@@ -282,7 +282,7 @@ async function generateAnswerWithMoonshot(question, apiKey) {
             'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-            model: 'kimi-k2.5',
+            model: 'moonshot-v1-8k',
             messages: [
                 {
                     role: 'system',
@@ -290,7 +290,7 @@ async function generateAnswerWithMoonshot(question, apiKey) {
                 },
                 { role: 'user', content: question }
             ],
-            temperature: 0.3
+            temperature: 1
         })
     });
 
