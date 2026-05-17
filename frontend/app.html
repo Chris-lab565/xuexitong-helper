@@ -443,6 +443,8 @@
                                       hw.status === 'done' ? '已完成' : '已逾期';
                     const officialUrl = hw.officialUrl || '';
                     const submitUrl = hw.submitUrl || '';
+                    const realUrl = 'https://mooc1.chaoxing.com/mooc-ans/work/doHomeWork?courseId=' + (hw.courseId || '') + '&classId=' + (hw.classId || '') + '&workId=' + (hw.workId || '');
+                    const safeTitle = (hw.title || '未命名作业').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
                     const hwEl = document.createElement('div');
                     hwEl.className = 'homework-item';
@@ -458,7 +460,7 @@
                             <span class="status-badge ${statusClass}">${statusText}</span>
                         </div>
                         <div class="homework-actions">
-                            <button class="btn btn-small" onclick="window.open('${officialUrl}', '_blank')">📝 查看题目</button>
+                            <button class="btn btn-small" onclick="showQuestions('${hw.workId}', '${realUrl}', '${safeTitle}')">📝 查看题目</button>
                             <button class="btn btn-secondary btn-small" onclick="copySubmitUrl('${submitUrl.replace(/'/g, "\\'")}')">🔗 去提交</button>
                         </div>
                     `;
