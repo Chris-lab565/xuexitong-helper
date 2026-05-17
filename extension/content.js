@@ -1,10 +1,10 @@
-// 学习通助手 - 内容脚本 v1.1.2
-// 注入到所有匹配页面，桥接网页 ↔ 扩展后台
+// 学习通助手 - 内容脚本 v1.2.1
+// 注入到所有匹配页面，桥接网页 ↔ 扩展后台（postMessage安全传递完整Cookie）
 
 (function() {
     'use strict';
 
-    console.log('[学习通助手] 内容脚本已加载 v1.1.2 location:', location.href, 'readyState:', document.readyState);
+    console.log('[学习通助手] 内容脚本已加载 v1.2.1 location:', location.href, 'readyState:', document.readyState);
 
     const hostname = location.hostname;
     const isXuexitongPage = hostname.includes('chaoxing.com') || hostname.includes('xuexitong.com');
@@ -47,14 +47,24 @@
 
     // ---- 主动获取 Cookie 并写入 DOM（仅 app 页面） ----
     function setDomCookie(cookie, uid) {
+        // 确保 document.body 存在（content script 在 document_start 运行）
+        if (!document.body) {
+            document.addEventListener('DOMContentLoaded', function() {
+                setDomCookie(cookie, uid);
+            });
+            return;
+        }
         document.body.dataset.xuexitongCookie = cookie;
         document.body.dataset.xuexitongUid = uid || '';
         document.body.dataset.xuexitongCookieReady = '1';
+
+        // postMessage 安全传递完整 Cookie 到网页上下文
         window.postMessage({
             type: 'XUEXITONG_HELPER_COOKIE_READY',
             cookie: cookie,
             uid: uid || ''
         }, '*');
+        console.log('[学习通助手] Cookie 已写入DOM + postMessage, len=' + cookie.length);
     }
 
     async function refreshDomCookie() {

@@ -1,11 +1,11 @@
-// 学习通助手 - 注入脚本 v1.1.2
+// 学习通助手 - 注入脚本 v1.2.0
 // 运行在页面上下文中，可访问 document.cookie
 // 通过 postMessage 与 content.js 通信，content.js 再与 background.js 通信
 
 (function() {
     'use strict';
 
-    console.log('[学习通助手] 注入脚本已加载 v1.1.2 hostname:', location.hostname, 'href:', location.href);
+    console.log('[学习通助手] 注入脚本已加载 v1.2.0 hostname:', location.hostname, 'href:', location.href);
 
     const hostname = location.hostname;
     const isXuexitongPage = hostname.includes('chaoxing.com') || hostname.includes('xuexitong.com');
@@ -65,27 +65,15 @@
             return;
         }
 
-        // 获取作业列表
+        // 获取作业列表（统一走 background.js 代理 — v1.2.0）
         if (type === 'XUEXITONG_HELPER_FETCH_HOMEWORK') {
             const cookie = event.data.cookie || '';
-            console.log('[学习通助手] 收到获取作业请求, cookie长度=' + cookie.length + ' isAppPage=' + isAppPage);
-
-            if (isXuexitongPage) {
-                console.log('[学习通助手] 学习通页面，直接 fetch');
-                fetchHomeworkDirect(cookie);
-            } else if (isAppPage) {
-                console.log('[学习通助手] app 页面，转发到 content.js → background');
-                window.postMessage({
-                    type: 'XUEXITONG_FETCH_HOMEWORK_BG',
-                    cookie: cookie
-                }, '*');
-            } else {
-                window.postMessage({
-                    type: 'XUEXITONG_HELPER_HOMEWORK_RESPONSE',
-                    success: false,
-                    error: '当前页面不支持获取作业'
-                }, '*');
-            }
+            console.log('[学习通助手] 收到获取作业请求, cookie长度=' + cookie.length);
+            // 统一转发到 content.js → background.js（使用最新API和完整请求头）
+            window.postMessage({
+                type: 'XUEXITONG_FETCH_HOMEWORK_BG',
+                cookie: cookie
+            }, '*');
             return;
         }
 
@@ -148,83 +136,16 @@
         }
     });
 
-    // 在学习通页面直接获取作业
-    async function fetchHomeworkDirect(cookie) {
-        try {
-            const coursesResponse = await fetch('https://mooc1-api.chaoxing.com/mooc-ans/visit/courselistdata', {
-                method: 'POST',
-                headers: {
-                    'Cookie': cookie,
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: 'courseType=1&page=1&pageSize=100'
-            });
-
-            const coursesText = await coursesResponse.text();
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(coursesText, 'text/html');
-            const courseItems = doc.querySelectorAll('.course-item');
-
-            const homeworkList = [];
-
-            for (const item of courseItems) {
-                const courseName = item.querySelector('.course-name')?.textContent?.trim() || '';
-                const courseLink = item.querySelector('a')?.href || '';
-                const match = courseLink.match(/courseId=(\d+).*?classId=(\d+)/);
-
-                if (match) {
-                    const hwList = await fetchCourseHomeworkDirect(cookie, match[1], match[2], courseName);
-                    homeworkList.push(...hwList);
-                }
-            }
-
-            window.postMessage({
-                type: 'XUEXITONG_HELPER_HOMEWORK_RESPONSE',
-                success: true,
-                data: { list: homeworkList }
-            }, '*');
-        } catch (err) {
-            window.postMessage({
-                type: 'XUEXITONG_HELPER_HOMEWORK_RESPONSE',
-                success: false,
-                error: err.message
-            }, '*');
-        }
-    }
-
-    async function fetchCourseHomeworkDirect(cookie, courseId, classId, courseName) {
-        try {
-            const response = await fetch(
-                `https://mooc1-api.chaoxing.com/mooc-ans/work/getAllWork?courseId=${courseId}&classId=${classId}&page=1&pageSize=100`,
-                { headers: { 'Cookie': cookie } }
-            );
-            const data = await response.json();
-
-            if (data && data.list) {
-                return data.list.map(hw => ({
-                    ...hw,
-                    courseName,
-                    workId: hw.workId || hw.id,
-                    title: hw.title || hw.name,
-                    status: hw.status === 1 ? 'done' : 'pending',
-                    endTime: hw.endTime || hw.deadline
-                }));
-            }
-            return [];
-        } catch (err) {
-            console.error('[学习通助手] 获取课程作业失败:', courseName, err.message);
-            return [];
-        }
-    }
-
-    // 在学习通页面直接获取题目
+    // 在学习通页面直接获取题目（仅题目页面使用，作业获取走background.js）
     async function fetchQuestionsDirect(cookie, url) {
         try {
             const response = await fetch(url, {
                 headers: { 'Cookie': cookie }
             });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
             const html = await response.text();
-
             window.postMessage({
                 type: 'XUEXITONG_HELPER_QUESTIONS_RESPONSE',
                 success: true,
