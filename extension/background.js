@@ -164,6 +164,73 @@ function safeJson(text) {
     }
 }
 
+// ======================= 题目解析 =======================
+
+async function getWorkQuestions(url) {
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
+        'Referer': 'https://mooc1.chaoxing.com/'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const html = await response.text();
+    console.log('[BG] 题目页面加载成功，长度：', html.length);
+
+    const questions = [];
+    let qid = 0;
+
+    const reg = /<div.*?(?:TiMu|singleQ|qItem)[\s\S]*?<\/div>\s*<\/div>/g;
+    let match;
+
+    while ((match = reg.exec(html)) !== null) {
+      const item = match[0];
+
+      const titleMatch = item.match(/<div.*?(?:clearfix|titleDiv|qTitle)[\s\S]*?>([\s\S]*?)<\/div>/);
+      if (!titleMatch) continue;
+
+      const title = titleMatch[1]
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (!title || title.length < 4) continue;
+
+      const options = [];
+      const optReg = /<div.*?(?:optionDiv|qOption)[\s\S]*?>([\s\S]*?)<\/div>/g;
+      let optMatch;
+      while ((optMatch = optReg.exec(item)) !== null) {
+        const opt = optMatch[1]
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (opt) options.push(opt);
+      }
+
+      questions.push({
+        qid: ++qid,
+        title: title,
+        options: options,
+        type: options.length > 0 ? "选择题/判断题" : "简答题",
+        answer: ""
+      });
+    }
+
+    console.log('[BG] 解析到题目数量：', questions.length);
+    return questions;
+  } catch (error) {
+    console.error('[BG] 获取题目失败：', error);
+    return [];
+  }
+}
+
 // ======================= 消息路由 =======================
 
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
@@ -235,7 +302,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 return;
             }
             try {
-                const questions = await getWorkQuestions({ realUrl: request.url });
+                const questions = await getWorkQuestions(request.url);
                 sendResponse({ success: true, data: questions });
             } catch (err) {
                 sendResponse({ success: false, error: '网络错误: ' + err.message });
@@ -474,71 +541,6 @@ function parseHomeworkFromHtml(html) {
         console.warn('[BG] 解析作业失败', e);
         return [];
     }
-}
-
-// 新版学习通题目解析（兼容普通作业+章节作业）
-async function getWorkQuestions(workData) {
-  try {
-    const url = workData.realUrl;
-    const res = await fetch(url, {
-      credentials: "include",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer": "https://mooc1.chaoxing.com/"
-      }
-    });
-
-    const html = await res.text();
-    console.log("[BG] 题目页面长度：", html.length);
-
-    const questions = [];
-    let qid = 0;
-
-    // 全能匹配正则：支持所有作业题型
-    const reg = /<div.*?(?:TiMu|singleQ|qItem)[\s\S]*?<\/div>\s*<\/div>/g;
-    let match;
-
-    while ((match = reg.exec(html)) !== null) {
-      const item = match[0];
-
-      // 提取题干
-      const titleMatch = item.match(/<div.*?(?:clearfix|titleDiv|qTitle)[\s\S]*?>([\s\S]*?)<\/div>/);
-      if (!titleMatch) continue;
-
-      const title = titleMatch[1]
-        .replace(/<[^>]+>/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-
-      if (!title || title.length < 4) continue;
-
-      // 提取选项
-      const options = [];
-      const optReg = /<div.*?(?:optionDiv|qOption)[\s\S]*?>([\s\S]*?)<\/div>/g;
-      let optMatch;
-      while ((optMatch = optReg.exec(item)) !== null) {
-        const opt = optMatch[1]
-          .replace(/<[^>]+>/g, " ")
-          .replace(/\s+/g, " ")
-          .trim();
-        if (opt) options.push(opt);
-      }
-
-      questions.push({
-        qid: ++qid,
-        title: title,
-        options: options,
-        type: options.length > 0 ? "选择题/判断题" : "简答题",
-        answer: ""
-      });
-    }
-
-    console.log("[BG] 解析题目数量：", questions.length);
-    return questions;
-  } catch (e) {
-    console.error("[BG] 获取题目失败：", e);
-    return [];
-  }
 }
 
 // 策略3：爬取单个课程页面HTML提取作业
