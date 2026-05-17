@@ -504,8 +504,16 @@
 
                 if (!questions || !Array.isArray(questions) || questions.length === 0) {
                     container.innerHTML = `
-                        <h4 style="margin-bottom: 20px; color: #667eea;">${title}</h4>
-                        <p>未能解析到题目，请在学习通页面查看。</p>
+                        <h4 style="margin-bottom: 15px; color: #667eea;">${title}</h4>
+                        <p style="color: #856404; margin-bottom: 10px; font-size: 13px;">⚠️ 自动解析失败，可手动粘贴题目内容，AI 将基于粘贴内容生成答案。</p>
+                        <textarea id="manualQuestion-${workId}" style="width:100%;height:120px;padding:10px;border:1px solid #ddd;border-radius:5px;font-size:14px;resize:vertical;box-sizing:border-box;" placeholder="解析失败，请在此粘贴题目内容"></textarea>
+                        <div style="margin-top: 10px;">
+                            <button class="btn btn-small" onclick="generateAnswerFromTextarea('${workId}')">🤖 AI生成答案</button>
+                        </div>
+                        <div id="answer-${workId}_manual" class="answer-box" style="display: none; margin-top: 10px;">
+                            <p class="answer-content">生成中...</p>
+                            <button class="btn btn-small" onclick="copyAnswer('${workId}_manual')">📋 复制</button>
+                        </div>
                     `;
                     return;
                 }
@@ -514,7 +522,6 @@
 
                 questions.forEach((q, idx) => {
                     const safeTitle = (q.title || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                    const safeAnswer = (q.answer || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
                     html += `
                         <div class="question-box" style="margin-bottom: 15px;">
@@ -557,6 +564,17 @@
             } catch (err) {
                 answerContent.textContent = '生成答案失败: ' + err.message;
             }
+        }
+
+        // 从手动文本框读取内容并生成AI答案
+        function generateAnswerFromTextarea(workId) {
+            const textarea = document.getElementById(`manualQuestion-${workId}`);
+            if (!textarea || !textarea.value.trim()) {
+                alert('请先在文本框中粘贴题目内容');
+                return;
+            }
+            const question = textarea.value.trim();
+            generateAnswer(`${workId}_manual`, question);
         }
 
         // 复制答案
