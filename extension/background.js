@@ -265,7 +265,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     if (request.action === 'fetchQuestions') {
         (async () => {
             const questions = await getWorkQuestions(request.url);
-            sendResponse({ success: true, data: questions, questions });
+            sendResponse({ success: true, data: questions, questions: questions });
         })();
         return true;
     }
