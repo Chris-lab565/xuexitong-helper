@@ -489,7 +489,7 @@ function parseHomeworkFromHtml(html) {
                     status,
                     courseName,
                     officialUrl,
-                    submitUrl: officialUrl
+                    submitUrl: `https://mooc1.chaoxing.com/mooc-ans/work/doHomeWork?courseId=${courseId}&classId=${classId}&workId=${workId}`
                 });
             }
         }
