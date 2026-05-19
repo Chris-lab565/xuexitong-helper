@@ -225,4 +225,80 @@
             return true;
         }
     });
+
+    // ======================= DOM 爬题 =======================
+
+    chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+        if (request.action === 'fetchQuestions') {
+            console.log('[Content] 收到爬题请求, location:', location.href);
+            const questions = parseQuestionsFromDom();
+            console.log('[Content] 解析到题目数量:', questions.length);
+            sendResponse({ success: true, data: questions, questions: questions });
+            return true;
+        }
+    });
+
+    function parseQuestionsFromDom() {
+        const questions = [];
+        let qid = 0;
+
+        const questionSelectors = [
+            '.TiMu',
+            '.singleQ',
+            '.qItem',
+            '.questionLi',
+            '[class*="questionLi"]',
+            '[class*="TiMu"]'
+        ];
+
+        const questionElements = document.querySelectorAll(questionSelectors.join(','));
+
+        for (const el of questionElements) {
+            const titleSelectors = [
+                '.clearfix',
+                '.titleDiv',
+                '.qTitle',
+                '.stem',
+                '[class*="title"]',
+                '[class*="stem"]'
+            ];
+
+            let title = '';
+            for (const selector of titleSelectors) {
+                const titleEl = el.querySelector(selector);
+                if (titleEl) {
+                    title = titleEl.innerText.replace(/\s+/g, ' ').trim();
+                    break;
+                }
+            }
+
+            if (!title || title.length < 4) continue;
+
+            const options = [];
+            const optionSelectors = [
+                '.optionDiv',
+                '.qOption',
+                '.option',
+                '[class*="option"]'
+            ];
+
+            for (const selector of optionSelectors) {
+                const optionEls = el.querySelectorAll(selector);
+                for (const optEl of optionEls) {
+                    const optText = optEl.innerText.replace(/\s+/g, ' ').trim();
+                    if (optText) options.push(optText);
+                }
+            }
+
+            questions.push({
+                qid: ++qid,
+                title: title,
+                options: options,
+                type: options.length > 0 ? '选择题' : '简答题',
+                answer: ''
+            });
+        }
+
+        return questions;
+    }
 })();

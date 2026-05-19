@@ -264,8 +264,21 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 
     if (request.action === 'fetchQuestions') {
         (async () => {
-            const questions = await getWorkQuestions(request.url);
-            sendResponse({ success: true, data: questions, questions: questions });
+            try {
+                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                if (!tab || !tab.id) {
+                    sendResponse({ success: false, error: '未找到活动标签页' });
+                    return;
+                }
+                const response = await chrome.tabs.sendMessage(tab.id, {
+                    action: 'fetchQuestions',
+                    url: request.url
+                });
+                sendResponse(response);
+            } catch (e) {
+                console.error('[BG] 转发爬题请求失败：', e);
+                sendResponse({ success: true, data: [], questions: [] });
+            }
         })();
         return true;
     }

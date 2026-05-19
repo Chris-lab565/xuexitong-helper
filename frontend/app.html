@@ -504,50 +504,61 @@
             try {
                 const questions = await api.getQuestions(workId, url);
 
-                if (!questions || !Array.isArray(questions) || questions.length === 0) {
-                    container.innerHTML = `
-                        <h4 style="margin-bottom: 15px; color: #667eea;">${title}</h4>
-                        <p style="color: #856404; margin-bottom: 10px; font-size: 13px;">⚠️ 自动解析失败，可手动粘贴题目内容</p>
-                        <textarea id="manualQuestion-${workId}" style="width:100%;height:120px;padding:10px;border:1px solid #ddd;border-radius:5px;font-size:14px;resize:vertical;box-sizing:border-box;" placeholder="解析失败，请在此粘贴题目内容"></textarea>
-                        <div style="margin-top: 10px;">
-                            <button class="btn btn-small" onclick="generateAnswerFromTextarea('${workId}')">🤖 AI生成答案</button>
-                        </div>
-                        <div id="answer-${workId}_manual" class="answer-box" style="display: none; margin-top: 10px;">
-                            <p class="answer-content">生成中...</p>
-                            <button class="btn btn-small" onclick="copyAnswer('${workId}_manual')">📋 复制</button>
-                        </div>
-                    `;
-                    return;
+                let questionsHtml = '';
+                let textareaContent = '';
+
+                if (questions && Array.isArray(questions) && questions.length > 0) {
+                    questions.forEach((q, idx) => {
+                        questionsHtml += `
+                            <div class="question-box" style="margin-bottom: 10px;">
+                                <p><strong>${q.qid || idx + 1}. [${q.type || '未知题型'}]</strong> ${q.title || '无题目内容'}</p>
+                                ${q.options && q.options.length > 0 ? `
+                                    <div style="margin: 5px 0; padding-left: 20px;">
+                                        ${q.options.map(opt => `<p style="margin: 2px 0;">${opt}</p>`).join('')}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                        textareaContent += `${q.qid || idx + 1}. ${q.title || ''}\n`;
+                        if (q.options && q.options.length > 0) {
+                            q.options.forEach(opt => { textareaContent += `${opt}\n`; });
+                        }
+                        textareaContent += '\n';
+                    });
                 }
 
-                let html = `<h4 style="margin-bottom: 15px; color: #667eea;">${title}</h4>`;
-
-                questions.forEach((q, idx) => {
-                    const safeTitle = (q.title || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-
-                    html += `
-                        <div class="question-box" style="margin-bottom: 15px;">
-                            <p><strong>${q.qid || idx + 1}. [${q.type || '未知题型'}]</strong> ${q.title || '无题目内容'}</p>
-                            ${q.options && q.options.length > 0 ? `
-                                <div style="margin: 10px 0; padding-left: 20px;">
-                                    ${q.options.map(opt => `<p style="margin: 3px 0;">${opt}</p>`).join('')}
-                                </div>
-                            ` : ''}
-                            <div class="answer-actions" style="margin-top: 10px;">
-                                <button class="btn btn-small" onclick="generateAnswer('${workId}_${q.qid}', '${safeTitle}')">🤖 AI生成答案</button>
-                            </div>
-                            <div id="answer-${workId}_${q.qid}" class="answer-box" style="display: none; margin-top: 10px;">
-                                <p class="answer-content">生成中...</p>
-                                <button class="btn btn-small" onclick="copyAnswer('${workId}_${q.qid}')">📋 复制</button>
-                            </div>
-                        </div>
-                    `;
-                });
-
-                container.innerHTML = html;
+                container.innerHTML = `
+                    <h4 style="margin-bottom: 12px; color: #667eea;">${title}</h4>
+                    ${questionsHtml ? `<div id="questionsList" style="margin-bottom: 15px; max-height: 300px; overflow-y: auto;">${questionsHtml}</div>` : `<p style="color: #856404; margin-bottom: 10px; font-size: 13px;">⚠️ 自动解析失败，可手动粘贴题目内容，AI 将基于粘贴内容生成答案。</p>`}
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 6px; font-weight: bold; font-size: 13px;">题目内容（可编辑修改，AI 基于此生成答案）</label>
+                        <textarea id="questionTextarea-${workId}" style="width:100%;height:160px;padding:10px;border:1px solid #ddd;border-radius:5px;font-size:14px;resize:vertical;box-sizing:border-box;" placeholder="${textareaContent ? '' : '请在此粘贴题目内容，AI 将基于此生成答案'}">${textareaContent.trim()}</textarea>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-small" onclick="generateAnswerFromTextarea('${workId}')">🤖 AI生成答案</button>
+                    </div>
+                    <div id="answer-${workId}" class="answer-box" style="display: none; margin-top: 10px;">
+                        <p class="answer-content">生成中...</p>
+                        <button class="btn btn-small" onclick="copyAnswer('${workId}')">📋 复制</button>
+                    </div>
+                `;
 
             } catch (err) {
-                container.innerHTML = `<p class="error">加载题目失败: ${err.message}</p>`;
+                container.innerHTML = `
+                    <h4 style="margin-bottom: 12px; color: #667eea;">${title}</h4>
+                    <p style="color: #856404; margin-bottom: 10px; font-size: 13px;">⚠️ 加载失败: ${err.message}，可手动粘贴题目内容。</p>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 6px; font-weight: bold; font-size: 13px;">题目内容（可编辑修改，AI 基于此生成答案）</label>
+                        <textarea id="questionTextarea-${workId}" style="width:100%;height:160px;padding:10px;border:1px solid #ddd;border-radius:5px;font-size:14px;resize:vertical;box-sizing:border-box;" placeholder="请在此粘贴题目内容，AI 将基于此生成答案"></textarea>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-small" onclick="generateAnswerFromTextarea('${workId}')">🤖 AI生成答案</button>
+                    </div>
+                    <div id="answer-${workId}" class="answer-box" style="display: none; margin-top: 10px;">
+                        <p class="answer-content">生成中...</p>
+                        <button class="btn btn-small" onclick="copyAnswer('${workId}')">📋 复制</button>
+                    </div>
+                `;
             }
         }
 
@@ -568,15 +579,15 @@
             }
         }
 
-        // 从手动文本框读取内容并生成AI答案
+        // 从文本框读取内容并生成AI答案
         function generateAnswerFromTextarea(workId) {
-            const textarea = document.getElementById(`manualQuestion-${workId}`);
+            const textarea = document.getElementById(`questionTextarea-${workId}`);
             if (!textarea || !textarea.value.trim()) {
-                alert('请先在文本框中粘贴题目内容');
+                alert('请先输入题目内容');
                 return;
             }
             const question = textarea.value.trim();
-            generateAnswer(`${workId}_manual`, question);
+            generateAnswer(workId, question);
         }
 
         // 复制答案
