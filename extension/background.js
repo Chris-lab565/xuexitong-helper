@@ -84,12 +84,13 @@ async function getAllChaoxingCookies() {
     return { cookie: cookieString, uid: uidValue, count: allCookies.length, raw: allCookies };
 }
 
-async function persistCookie(cookie, uid) {
+async function persistCookie(cookie, uid, count) {
     await chrome.storage.local.set({
         [STORAGE_KEY]: cookie,
         [STORAGE_UID_KEY]: uid,
         [STORAGE_TIME_KEY]: Date.now()
     });
+    globalCookies = { cookie, uid, count, time: Date.now() };
 }
 
 async function getStoredCookie() {
@@ -165,6 +166,9 @@ function safeJson(text) {
     }
 }
 
+// ======================= 全局 Cookie 缓存（供外部网站查询） =======================
+let globalCookies = {};
+
 // ======================= 消息路由 =======================
 
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
@@ -173,7 +177,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     if (request.action === 'getCookie') {
         getAllChaoxingCookies().then(result => {
             if (result.count > 0) {
-                persistCookie(result.cookie, result.uid);
+                persistCookie(result.cookie, result.uid, result.count);
+                globalCookies = { cookie: result.cookie, uid: result.uid, count: result.count, time: Date.now() };
                 sendResponse({ cookie: result.cookie, uid: result.uid, count: result.count, source: 'cookies_api' });
             } else {
                 getStoredCookie().then(stored => {
@@ -190,7 +195,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 
     if (request.action === 'refreshCookie') {
         getAllChaoxingCookies().then(result => {
-            persistCookie(result.cookie, result.uid);
+            persistCookie(result.cookie, result.uid, result.count);
+            globalCookies = { cookie: result.cookie, uid: result.uid, count: result.count, time: Date.now() };
             sendResponse({ success: true, uid: result.uid, count: result.count });
         }).catch(err => {
             sendResponse({ success: false, error: err.message });
@@ -258,6 +264,34 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         return true;
     }
 });
+
+// ======================= 外部消息通信（网站 ↔ 扩展） =======================
+
+chrome.runtime.onMessageExternal.addListener(function(request, sender, sendResponse) {
+    console.log('[BG] External message:', request);
+
+    // 网站 PING 检测
+    if (request.action === 'ping') {
+        sendResponse({
+            success: true,
+            installed: true,
+            version: '1.2.10'
+        });
+        return true;
+    }
+
+    // 网站请求 Cookie
+    if (request.action === 'getCookies') {
+        sendResponse({
+            success: true,
+            cookies: globalCookies || {}
+        });
+        return true;
+    }
+
+    return true;
+});
+
 // ======================= 作业获取核心 =======================
 
 // 从 backclazzdata JSON 提取 courseId/classId/courseName
