@@ -1,4 +1,5 @@
 // 学习通助手 v1.2.10 — 全自动抗改版 | 接口劫持+DOM双兜底 | iframe+shadowDOM全覆盖
+console.log('=== inject.js loaded v1.2.10 ===');
 (function() {
     'use strict';
 

@@ -1,5 +1,6 @@
 // 学习通助手 - 后台脚本 (Service Worker)
 // v1.2.10 - 全自动抗改版 | fetchQuestions转发content.js | 接口劫持+DOM双兜底
+console.log('=== NEW BACKGROUND LOADED v1.2.10 | 纯转发模式 | 无后台HTTP爬题 ===');
 
 const STORAGE_KEY = 'xuexitongCookie';
 const STORAGE_UID_KEY = 'xuexitongUid';
