@@ -580,3 +580,34 @@ chrome.runtime.onInstalled.addListener(function() {
 });
 
 console.log('[学习通助手] Background Service Worker 已启动 v1.2.10');
+
+// ======================= 扩展图标点击 =======================
+
+chrome.action.onClicked.addListener(async (tab) => {
+    try {
+        console.log('[学习通助手] 点击扩展图标');
+
+        // 获取当前 Cookie
+        const cookies = await chrome.cookies.getAll({
+            domain: '.chaoxing.com'
+        });
+
+        const cookieStr = cookies
+            .map(c => `${c.name}=${c.value}`)
+            .join('; ');
+
+        console.log('[学习通助手] Cookie数量:', cookies.length);
+
+        // 打开助手网页
+        const url =
+            'https://chris-lab565.github.io/xuexitong-helper/app.html#xtcookie='
+            + encodeURIComponent(cookieStr);
+
+        chrome.tabs.create({
+            url
+        });
+
+    } catch (e) {
+        console.error('[学习通助手] 点击失败:', e);
+    }
+});
