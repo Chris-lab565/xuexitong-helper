@@ -14,6 +14,7 @@
     const hostname = location.hostname;
     const isXuexitongPage = hostname.includes('chaoxing.com') || hostname.includes('xuexitong.com');
     const isAppPage = hostname.includes('github.io');
+    const isTopWindow = (window.top === window.self);
 
     (function injectScript() {
         function doInject() {
@@ -44,118 +45,96 @@
     let userEditing = false;
     let latestQuestions = [];
 
-    // ==================== Shadow DOM 浮窗（延迟到 body 就绪） ====================
-    let panel, root, textarea, answerEl, boxEl, bodyEl, headerEl;
-    let isDragging = false, dragStartX = 0, dragStartY = 0, panelStartX = 0, panelStartY = 0;
-    let isMinimized = false, isCollapsed = false;
+    // ==================== AI 面板（仅顶层窗口创建） ====================
+    if (!isTopWindow) {
+        console.log('[Content] iframe skip UI');
+    } else if (window.__xxtUIPanelCreated) {
+        console.log('[Content] UI already exists');
+    } else {
+        window.__xxtUIPanelCreated = true;
+        createAIPanel();
+    }
 
-    function createPanel() {
-        panel = document.createElement('div');
-        panel.id = '__xxt_ai_panel';
-        panel.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:2147483647;width:380px;transition:transform 0.2s,opacity 0.2s;';
+    function createAIPanel() {
+        console.log('[Content] create AI panel');
 
-        root = panel.attachShadow({ mode: 'open' });
+        const panel = document.createElement('div');
+        panel.id = 'xxt-ai-panel';
+        panel.style.cssText = 'position:fixed;right:24px;bottom:24px;width:380px;z-index:999999;pointer-events:auto;';
+
+        const root = panel.attachShadow({ mode: 'open' });
 
         root.innerHTML = `
             <style>
-                :host { --primary: #007bff; --bg: #fff; --border: #e0e0e0; --text: #222; font-family: system-ui, sans-serif; }
-                .box { background: var(--bg); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.18); overflow: hidden; }
-                .header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px;
-                    background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; cursor: move; user-select: none;
-                    font-size: 14px; font-weight: 600; }
-                .header-btns { display: flex; gap: 4px; }
-                .header-btns button { width: 26px; height: 26px; border: none; border-radius: 6px;
-                    background: rgba(255,255,255,0.2); color: #fff; cursor: pointer; font-size: 14px; line-height: 1;
-                    display: flex; align-items: center; justify-content: center; transition: background 0.15s; }
-                .header-btns button:hover { background: rgba(255,255,255,0.35); }
-                .body { padding: 12px 14px; transition: max-height 0.3s, padding 0.3s; overflow: hidden; }
-                .body.collapsed { max-height: 0; padding: 0 14px; }
-                textarea { width: 100%; height: 140px; box-sizing: border-box; border: 1px solid var(--border);
-                    border-radius: 8px; padding: 10px; font-size: 13px; resize: vertical; outline: none;
-                    transition: border-color 0.2s; font-family: inherit; color: var(--text); }
-                textarea:focus { border-color: var(--primary); }
-                .btns { display: flex; gap: 8px; margin-top: 10px; }
-                .btns button { flex: 1; padding: 10px 0; border: none; border-radius: 8px; font-size: 14px;
-                    font-weight: 500; cursor: pointer; transition: opacity 0.15s; }
-                .btns button:hover { opacity: 0.85; }
-                #genBtn { background: var(--primary); color: #fff; }
-                #copyBtn { background: #e9ecef; color: #333; }
-                #answer { margin-top: 10px; font-size: 13px; white-space: pre-wrap; max-height: 220px;
-                    overflow-y: auto; color: var(--text); line-height: 1.6; }
-                .minimized .body { display: none; }
-                .minimized .box { border-radius: 12px; }
+                :host { font-family: system-ui, sans-serif; }
+                .box {
+                    background: #fff;
+                    border-radius: 12px;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+                    padding: 14px;
+                    border: 1px solid #eee;
+                }
+                h4 { margin: 0 0 10px 0; font-size: 14px; color: #222; }
+                textarea {
+                    width: 100%;
+                    height: 140px;
+                    box-sizing: border-box;
+                    border: 1px solid #ddd;
+                    border-radius: 8px;
+                    padding: 10px;
+                    font-size: 14px;
+                    resize: vertical;
+                    outline: none;
+                    font-family: inherit;
+                }
+                textarea:focus { border-color: #007bff; }
+                .btns { display: flex; gap: 10px; margin-top: 10px; }
+                button {
+                    flex: 1;
+                    padding: 10px;
+                    border: none;
+                    border-radius: 8px;
+                    background: #007bff;
+                    color: white;
+                    font-size: 14px;
+                    cursor: pointer;
+                    transition: opacity 0.15s;
+                }
+                button:hover { opacity: 0.85; }
+                #copyBtn { background: #6c757d; }
+                #answer {
+                    margin-top: 12px;
+                    font-size: 14px;
+                    white-space: pre-wrap;
+                    max-height: 220px;
+                    overflow: auto;
+                    color: #222;
+                    line-height: 1.6;
+                }
             </style>
-            <div class="box" id="box">
-                <div class="header" id="header">
-                    <span>🤖 AI 答题助手</span>
-                    <div class="header-btns">
-                        <button id="minBtn" title="最小化">━</button>
-                        <button id="colBtn" title="折叠">▲</button>
-                    </div>
+            <div class="box">
+                <h4>AI 答题助手</h4>
+                <textarea id="qInput" placeholder="题目自动显示在这里，可直接编辑…"></textarea>
+                <div class="btns">
+                    <button id="genBtn">⚡ 生成答案</button>
+                    <button id="copyBtn">📋 复制</button>
                 </div>
-                <div class="body" id="pBody">
-                    <textarea id="qInput" placeholder="题目自动显示在这里，可直接编辑…"></textarea>
-                    <div class="btns">
-                        <button id="genBtn">⚡ 生成答案</button>
-                        <button id="copyBtn">📋 复制</button>
-                    </div>
-                    <div id="answer"></div>
-                </div>
+                <div id="answer"></div>
             </div>
         `;
 
-        document.body.appendChild(panel);
+        // 挂载到 documentElement，防止 body 被学习通替换导致面板消失
+        document.documentElement.appendChild(panel);
 
-        // DOM 引用
-        headerEl = root.getElementById('header');
-        bodyEl = root.getElementById('pBody');
-        textarea = root.getElementById('qInput');
-        answerEl = root.getElementById('answer');
-        boxEl = root.getElementById('box');
-
-        // ==================== 拖拽 ====================
-        headerEl.addEventListener('mousedown', function(e) {
-            if (e.target.tagName === 'BUTTON') return;
-            isDragging = true;
-            dragStartX = e.clientX;
-            dragStartY = e.clientY;
-            const rect = panel.getBoundingClientRect();
-            panelStartX = rect.left;
-            panelStartY = rect.top;
-            panel.style.transition = 'none';
-            e.preventDefault();
-        });
-
-        document.addEventListener('mousemove', function(e) {
-            if (!isDragging) return;
-            const dx = e.clientX - dragStartX;
-            const dy = e.clientY - dragStartY;
-            panel.style.right = 'auto';
-            panel.style.bottom = 'auto';
-            panel.style.left = (panelStartX + dx) + 'px';
-            panel.style.top = (panelStartY + dy) + 'px';
-        });
-
-        document.addEventListener('mouseup', function() {
-            if (!isDragging) return;
-            isDragging = false;
-            panel.style.transition = 'transform 0.2s, opacity 0.2s';
-        });
-
-        // ==================== 最小化/折叠 ====================
-        root.getElementById('minBtn').addEventListener('click', function() {
-            isMinimized = !isMinimized;
-            boxEl.classList.toggle('minimized', isMinimized);
-            this.textContent = isMinimized ? '□' : '━';
-        });
-
-        root.getElementById('colBtn').addEventListener('click', function() {
-            isCollapsed = !isCollapsed;
-            bodyEl.classList.toggle('collapsed', isCollapsed);
-            this.textContent = isCollapsed ? '▼' : '▲';
-        });
+        // 暴露 UI 引用
+        window.__xxtUI = {
+            panel,
+            input: root.getElementById('qInput'),
+            answer: root.getElementById('answer')
+        };
 
         // ==================== userEditing 锁 ====================
+        const textarea = window.__xxtUI.input;
         textarea.addEventListener('focus', function() {
             userEditing = true;
         });
@@ -163,14 +142,14 @@
             setTimeout(function() { userEditing = false; }, 2000);
         });
 
-        // ==================== AI 生成/复制 ====================
+        // ==================== AI 生成 ====================
         root.getElementById('genBtn').addEventListener('click', async function() {
             const text = textarea.value.trim();
             if (!text) { alert('请输入题目内容'); return; }
-            answerEl.textContent = 'AI 思考中…';
+            window.__xxtUI.answer.textContent = 'AI 思考中…';
             try {
                 const apiKey = await getApiKey();
-                if (!apiKey) { answerEl.textContent = '请先在应用页面设置 Moonshot API Key'; return; }
+                if (!apiKey) { window.__xxtUI.answer.textContent = '请先在应用页面设置 Moonshot API Key'; return; }
                 const resp = await fetch('https://api.moonshot.cn/v1/chat/completions', {
                     method: 'POST',
                     headers: {
@@ -188,14 +167,15 @@
                     })
                 });
                 const data = await resp.json();
-                answerEl.textContent = data.choices?.[0]?.message?.content || '未获取到答案';
+                window.__xxtUI.answer.textContent = data.choices?.[0]?.message?.content || '未获取到答案';
             } catch(e) {
-                answerEl.textContent = '生成失败: ' + e.message;
+                window.__xxtUI.answer.textContent = '生成失败: ' + e.message;
             }
         });
 
+        // ==================== 复制 ====================
         root.getElementById('copyBtn').addEventListener('click', function() {
-            const ans = answerEl.textContent;
+            const ans = window.__xxtUI.answer.textContent;
             if (!ans || ans === 'AI 思考中…') { alert('请先生成答案'); return; }
             navigator.clipboard.writeText(ans).then(function() {
                 alert('答案已复制到剪贴板');
@@ -210,13 +190,8 @@
                 alert('答案已复制到剪贴板');
             });
         });
-    }
 
-    // 延迟创建面板，等待 body 就绪
-    if (document.body) {
-        createPanel();
-    } else {
-        document.addEventListener('DOMContentLoaded', createPanel);
+        console.log('[Content] AI panel created');
     }
 
     async function getApiKey() {
@@ -239,11 +214,12 @@
     });
 
     function syncToAIInput(questions) {
-        if (!textarea || userEditing) return;
+        const input = window.__xxtUI && window.__xxtUI.input;
+        if (!input || userEditing) return;
         const text = questions.map(function(q, i) {
             return (i + 1) + '. ' + q.title + '\n' + (q.options || []).join('\n');
         }).join('\n\n');
-        if (text.trim()) textarea.value = text;
+        if (text.trim()) input.value = text;
     }
 
     // ==================== 后台指令 ====================
@@ -264,7 +240,6 @@
 
     // ==================== GitHub Pages 应用页 Cookie 桥接 ====================
     if (isAppPage) {
-        // Cookie 写入 DOM + postMessage
         function setDomCookie(cookie, uid) {
             function ready() {
                 if (!document.body) return;
