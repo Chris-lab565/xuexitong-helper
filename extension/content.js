@@ -60,7 +60,7 @@
 
         const panel = document.createElement('div');
         panel.id = 'xxt-ai-panel';
-        panel.style.cssText = 'position:fixed;right:24px;bottom:24px;width:380px;z-index:999999;pointer-events:auto;';
+        panel.style.cssText = 'position:fixed;right:24px;bottom:24px;width:380px;z-index:999999;pointer-events:none;background:transparent;';
 
         const root = panel.attachShadow({ mode: 'open' });
 
@@ -68,6 +68,7 @@
             <style>
                 :host { font-family: system-ui, sans-serif; }
                 .box {
+                    pointer-events: auto;
                     background: #fff;
                     border-radius: 12px;
                     box-shadow: 0 8px 32px rgba(0,0,0,0.15);
