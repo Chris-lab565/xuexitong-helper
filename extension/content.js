@@ -6,11 +6,27 @@
     if (window.__xxtInjected) return;
     window.__xxtInjected = true;
 
-    // ==================== 注入 inject.js 到页面上下文 ====================
-    const s = document.createElement('script');
-    s.src = chrome.runtime.getURL('inject.js');
-    s.onload = function() { this.remove(); };
-    (document.head || document.documentElement).appendChild(s);
+    // 稳定注入 inject.js 到页面主上下文
+    function injectHookScript() {
+      const script = document.createElement('script');
+      script.src = chrome.runtime.getURL('inject.js');
+      script.onload = function() {
+        this.remove();
+        console.log('[Content] inject.js 已成功注入');
+      };
+      script.onerror = function() {
+        console.error('[Content] inject.js 注入失败');
+      };
+      // 插入到 head 最前，避免被页面 DOM 操作移除
+      document.head.prepend(script);
+    }
+
+    // 确保 DOM 就绪后再注入
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', injectHookScript);
+    } else {
+      injectHookScript();
+    }
 
     // ==================== userEditing 状态锁 ====================
     let userEditing = false;

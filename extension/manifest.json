@@ -30,12 +30,10 @@
       "all_frames": true
     }
   ],
-  "web_accessible_resources": [
-    {
-      "resources": ["inject.js", "api.js"],
-      "matches": ["*://*.chaoxing.com/*", "*://*.xuexitong.com/*", "*://*.github.io/*"]
-    }
-  ],
+  "web_accessible_resources": [{
+    "resources": ["inject.js"],
+    "matches": ["*://*.chaoxing.com/*", "*://*.xuexitong.com/*"]
+  }],
   "action": {
     "default_popup": "popup.html",
     "default_title": "学习通助手"
