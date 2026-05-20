@@ -227,11 +227,31 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         (async () => {
             try {
                 const [tab] = await chrome.tabs.query({ active:true, currentWindow:true });
-                const res = await chrome.tabs.sendMessage(tab.id, { action:'fetchQuestions' });
+
+                if (!tab || !tab.id) {
+                    sendResponse({
+                        success: false,
+                        error: '未找到活动标签页'
+                    });
+                    return;
+                }
+
+                // 仅转发给 content.js
+                const res = await chrome.tabs.sendMessage(
+                    tab.id,
+                    { action: 'fetchQuestions' }
+                );
+
                 sendResponse(res);
+
             } catch (e) {
+
                 console.error('[BG] 转发失败:', e);
-                sendResponse({ success:true, questions:[] });
+
+                sendResponse({
+                    success: true,
+                    questions: []
+                });
             }
         })();
         return true;

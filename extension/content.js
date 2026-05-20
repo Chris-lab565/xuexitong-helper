@@ -30,7 +30,7 @@
 
     // ==================== userEditing 状态锁 ====================
     let userEditing = false;
-    let lastQuestions = [];
+    let latestQuestions = [];
 
     // ==================== Shadow DOM 浮窗 ====================
     const panel = document.createElement('div');
@@ -211,7 +211,7 @@
         if (e.origin !== location.origin) return;
         if (e.data && e.data.type === 'XXT_QUESTIONS') {
             const qs = e.data.questions || [];
-            lastQuestions = qs;
+            latestQuestions = qs;
             if (!userEditing) syncToAIInput(qs);
             chrome.runtime.sendMessage({ action: 'questionsUpdated', questions: qs }).catch(function(){});
         }
@@ -228,7 +228,7 @@
     // ==================== 后台指令 ====================
     chrome.runtime.onMessage.addListener(function(msg, sender, sendResponse) {
         if (msg.action === 'fetchQuestions') {
-            sendResponse({ success: true, questions: lastQuestions || [] });
+            sendResponse({ success: true, questions: latestQuestions });
             return true;
         }
         return false;
