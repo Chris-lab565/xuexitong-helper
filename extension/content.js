@@ -287,15 +287,15 @@
                 window.postMessage({ type: 'XUEXITONG_HELPER_PONG' }, location.origin);
                 return;
             }
-            if (type === 'XUEXITONG_GET_COOKIE_FROM_BG') {
+            if (type === 'XUEXITONG_HELPER_GET_COOKIE') {
                 chrome.runtime.sendMessage({ action: 'getCookie' }, function(resp) {
-                    window.postMessage({ type: 'XUEXITONG_COOKIE_FROM_BG_RESPONSE', cookie: resp?.cookie || null, uid: resp?.uid || null, count: resp?.count || 0 }, location.origin);
+                    window.postMessage({ type: 'XUEXITONG_HELPER_COOKIE_RESPONSE', cookie: resp?.cookie || null, uid: resp?.uid || null, count: resp?.count || 0 }, location.origin);
                 });
                 return;
             }
-            if (type === 'XUEXITONG_FETCH_HOMEWORK_BG') {
+            if (type === 'XUEXITONG_HELPER_FETCH_HOMEWORK') {
                 chrome.runtime.sendMessage({ action: 'fetchHomework', cookie: event.data.cookie || '' }, function(resp) {
-                    window.postMessage({ type: 'XUEXITONG_HOMEWORK_BG_RESPONSE', success: resp?.success || false, data: resp?.data || null, error: resp?.error || null }, location.origin);
+                    window.postMessage({ type: 'XUEXITONG_HELPER_HOMEWORK_RESPONSE', success: resp?.success || false, data: resp?.data || null, error: resp?.error || null }, location.origin);
                 });
                 return;
             }
@@ -303,9 +303,9 @@
                 chrome.storage.local.set({ moonshot_api_key: event.data.apiKey || '' });
                 return;
             }
-            if (type === 'XUEXITONG_FETCH_QUESTIONS_BG') {
+            if (type === 'XUEXITONG_HELPER_FETCH_QUESTIONS') {
                 chrome.runtime.sendMessage({ action: 'fetchQuestions', cookie: event.data.cookie || '', url: event.data.url || '' }, function(resp) {
-                    window.postMessage({ type: 'XUEXITONG_QUESTIONS_BG_RESPONSE', success: resp?.success || false, data: resp?.data || null, error: resp?.error || null }, location.origin);
+                    window.postMessage({ type: 'XUEXITONG_HELPER_QUESTIONS_RESPONSE', success: resp?.success || false, data: resp?.data || null, error: resp?.error || null }, location.origin);
                 });
                 return;
             }
