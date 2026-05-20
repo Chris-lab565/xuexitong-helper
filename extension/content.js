@@ -1,304 +1,307 @@
-// 学习通助手 - 内容脚本 v1.2.1
-// 注入到所有匹配页面，桥接网页 ↔ 扩展后台（postMessage安全传递完整Cookie）
-
+// 学习通助手 v1.2.10 — content.js | ShadowDOM 常驻浮窗 | 注入 inject.js
 (function() {
     'use strict';
 
-    console.log('[学习通助手] 内容脚本已加载 v1.2.1 location:', location.href, 'readyState:', document.readyState);
+    // 防止重复创建浮窗
+    if (window.__xxtInjected) return;
+    window.__xxtInjected = true;
 
+    // ==================== 注入 inject.js 到页面上下文 ====================
+    const s = document.createElement('script');
+    s.src = chrome.runtime.getURL('inject.js');
+    s.onload = function() { this.remove(); };
+    (document.head || document.documentElement).appendChild(s);
+
+    // ==================== userEditing 状态锁 ====================
+    let userEditing = false;
+    let lastQuestions = [];
+
+    // ==================== Shadow DOM 浮窗 ====================
+    const panel = document.createElement('div');
+    panel.id = '__xxt_ai_panel';
+    panel.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:2147483647;width:380px;transition:transform 0.2s,opacity 0.2s;';
+
+    const root = panel.attachShadow({ mode: 'open' });
+
+    // 拖拽状态
+    let isDragging = false, dragStartX = 0, dragStartY = 0, panelStartX = 0, panelStartY = 0;
+    let isMinimized = false, isCollapsed = false;
+
+    root.innerHTML = `
+        <style>
+            :host { --primary: #007bff; --bg: #fff; --border: #e0e0e0; --text: #222; font-family: system-ui, sans-serif; }
+            .box { background: var(--bg); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.18); overflow: hidden; }
+            .header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px;
+                background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; cursor: move; user-select: none;
+                font-size: 14px; font-weight: 600; }
+            .header-btns { display: flex; gap: 4px; }
+            .header-btns button { width: 26px; height: 26px; border: none; border-radius: 6px;
+                background: rgba(255,255,255,0.2); color: #fff; cursor: pointer; font-size: 14px; line-height: 1;
+                display: flex; align-items: center; justify-content: center; transition: background 0.15s; }
+            .header-btns button:hover { background: rgba(255,255,255,0.35); }
+            .body { padding: 12px 14px; transition: max-height 0.3s, padding 0.3s; overflow: hidden; }
+            .body.collapsed { max-height: 0; padding: 0 14px; }
+            textarea { width: 100%; height: 140px; box-sizing: border-box; border: 1px solid var(--border);
+                border-radius: 8px; padding: 10px; font-size: 13px; resize: vertical; outline: none;
+                transition: border-color 0.2s; font-family: inherit; color: var(--text); }
+            textarea:focus { border-color: var(--primary); }
+            .btns { display: flex; gap: 8px; margin-top: 10px; }
+            .btns button { flex: 1; padding: 10px 0; border: none; border-radius: 8px; font-size: 14px;
+                font-weight: 500; cursor: pointer; transition: opacity 0.15s; }
+            .btns button:hover { opacity: 0.85; }
+            #genBtn { background: var(--primary); color: #fff; }
+            #copyBtn { background: #e9ecef; color: #333; }
+            #answer { margin-top: 10px; font-size: 13px; white-space: pre-wrap; max-height: 220px;
+                overflow-y: auto; color: var(--text); line-height: 1.6; }
+            .minimized .body { display: none; }
+            .minimized .box { border-radius: 12px; }
+        </style>
+        <div class="box" id="box">
+            <div class="header" id="header">
+                <span>🤖 AI 答题助手</span>
+                <div class="header-btns">
+                    <button id="minBtn" title="最小化">━</button>
+                    <button id="colBtn" title="折叠">▲</button>
+                </div>
+            </div>
+            <div class="body" id="body">
+                <textarea id="qInput" placeholder="题目自动显示在这里，可直接编辑…"></textarea>
+                <div class="btns">
+                    <button id="genBtn">⚡ 生成答案</button>
+                    <button id="copyBtn">📋 复制</button>
+                </div>
+                <div id="answer"></div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(panel);
+
+    // DOM 引用
+    const headerEl = root.getElementById('header');
+    const bodyEl = root.getElementById('body');
+    const textarea = root.getElementById('qInput');
+    const answerEl = root.getElementById('answer');
+    const boxEl = root.getElementById('box');
+
+    // ==================== 拖拽 ====================
+    headerEl.addEventListener('mousedown', function(e) {
+        if (e.target.tagName === 'BUTTON') return;
+        isDragging = true;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        const rect = panel.getBoundingClientRect();
+        panelStartX = rect.left;
+        panelStartY = rect.top;
+        panel.style.transition = 'none';
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        const dx = e.clientX - dragStartX;
+        const dy = e.clientY - dragStartY;
+        panel.style.right = 'auto';
+        panel.style.bottom = 'auto';
+        panel.style.left = (panelStartX + dx) + 'px';
+        panel.style.top = (panelStartY + dy) + 'px';
+    });
+
+    document.addEventListener('mouseup', function() {
+        if (!isDragging) return;
+        isDragging = false;
+        panel.style.transition = 'transform 0.2s, opacity 0.2s';
+    });
+
+    // ==================== 最小化/折叠 ====================
+    root.getElementById('minBtn').addEventListener('click', function() {
+        isMinimized = !isMinimized;
+        boxEl.classList.toggle('minimized', isMinimized);
+        this.textContent = isMinimized ? '□' : '━';
+    });
+
+    root.getElementById('colBtn').addEventListener('click', function() {
+        isCollapsed = !isCollapsed;
+        bodyEl.classList.toggle('collapsed', isCollapsed);
+        this.textContent = isCollapsed ? '▼' : '▲';
+    });
+
+    // ==================== userEditing 锁 ====================
+    textarea.addEventListener('focus', function() {
+        userEditing = true;
+    });
+    textarea.addEventListener('blur', function() {
+        setTimeout(function() { userEditing = false; }, 2000);
+    });
+
+    // ==================== AI 生成/复制 ====================
+    root.getElementById('genBtn').addEventListener('click', async function() {
+        const text = textarea.value.trim();
+        if (!text) { alert('请输入题目内容'); return; }
+        answerEl.textContent = 'AI 思考中…';
+        try {
+            const apiKey = await getApiKey();
+            if (!apiKey) { answerEl.textContent = '请先在应用页面设置 Moonshot API Key'; return; }
+            const resp = await fetch('https://api.moonshot.cn/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + apiKey
+                },
+                body: JSON.stringify({
+                    model: 'moonshot-v1-8k',
+                    messages: [
+                        { role: 'system', content: '你是学习通答题助手，请根据题目内容给出正确答案。只输出答案，不要解释过程。' },
+                        { role: 'user', content: text }
+                    ],
+                    temperature: 1,
+                    max_tokens: 1000
+                })
+            });
+            const data = await resp.json();
+            answerEl.textContent = data.choices?.[0]?.message?.content || '未获取到答案';
+        } catch(e) {
+            answerEl.textContent = '生成失败: ' + e.message;
+        }
+    });
+
+    root.getElementById('copyBtn').addEventListener('click', function() {
+        const ans = answerEl.textContent;
+        if (!ans || ans === 'AI 思考中…') { alert('请先生成答案'); return; }
+        navigator.clipboard.writeText(ans).then(function() {
+            alert('答案已复制到剪贴板');
+        }).catch(function() {
+            const ta = document.createElement('textarea');
+            ta.value = ans;
+            ta.style.cssText = 'position:fixed;left:-9999px;';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            alert('答案已复制到剪贴板');
+        });
+    });
+
+    async function getApiKey() {
+        return new Promise(function(resolve) {
+            chrome.storage.local.get(['moonshot_api_key'], function(result) {
+                resolve(result.moonshot_api_key || null);
+            });
+        });
+    }
+
+    // ==================== 监听 inject.js 的题目推送 ====================
+    window.addEventListener('message', function(e) {
+        if (e.origin !== location.origin) return;
+        if (e.data && e.data.type === 'XXT_QUESTIONS') {
+            const qs = e.data.questions || [];
+            lastQuestions = qs;
+            if (!userEditing) syncToAIInput(qs);
+            chrome.runtime.sendMessage({ action: 'questionsUpdated', questions: qs }).catch(function(){});
+        }
+    });
+
+    function syncToAIInput(questions) {
+        if (!textarea || userEditing) return;
+        const text = questions.map(function(q, i) {
+            return (i + 1) + '. ' + q.title + '\n' + (q.options || []).join('\n');
+        }).join('\n\n');
+        if (text.trim()) textarea.value = text;
+    }
+
+    // ==================== 后台指令 ====================
+    chrome.runtime.onMessage.addListener(function(msg, sender, sendResponse) {
+        if (msg.action === 'fetchQuestions') {
+            sendResponse({ success: true, questions: lastQuestions || [] });
+            return true;
+        }
+        return false;
+    });
+
+    // ==================== 监听 storage 中的 API Key 变更 ====================
+    chrome.storage.onChanged.addListener(function(changes) {
+        if (changes.moonshot_api_key) {
+            console.log('[Content] API Key 已更新');
+        }
+    });
+
+    console.log('[Content] v1.2.10 已加载, inject.js 已注入');
+
+    // ==================== GitHub Pages 应用页 Cookie 桥接（向后兼容） ====================
     const hostname = location.hostname;
     const isXuexitongPage = hostname.includes('chaoxing.com') || hostname.includes('xuexitong.com');
     const isAppPage = hostname.includes('github.io');
 
-    // 注入 injected.js 到页面上下文
-    function injectScript() {
-        if (document.getElementById('xuexitong-injected')) {
-            console.log('[学习通助手] injected.js 已存在，跳过注入');
-            return;
+    if (isAppPage) {
+        // Cookie 写入 DOM + postMessage
+        function setDomCookie(cookie, uid) {
+            const ready = function() {
+                if (!document.body) return;
+                document.body.dataset.xuexitongCookie = cookie;
+                document.body.dataset.xuexitongUid = uid || '';
+                document.body.dataset.xuexitongCookieReady = '1';
+                window.postMessage({ type: 'XUEXITONG_HELPER_COOKIE_READY', cookie: cookie, uid: uid || '' }, location.origin);
+            };
+            if (!document.body) { document.addEventListener('DOMContentLoaded', ready); }
+            else { ready(); }
         }
 
-        const script = document.createElement('script');
-        script.id = 'xuexitong-injected';
-        script.src = chrome.runtime.getURL('injected.js');
-        script.onload = function() {
-            console.log('[学习通助手] injected.js 加载成功');
-            this.remove();
-        };
-        script.onerror = function(e) {
-            console.error('[学习通助手] injected.js 加载失败:', e, '当前页面 CSP 可能阻止了扩展脚本');
-        };
-        const target = document.head || document.documentElement;
-        if (target) {
-            target.appendChild(script);
-            console.log('[学习通助手] injected.js 已添加到', target.tagName);
-        } else {
-            console.error('[学习通助手] 无法注入 injected.js: document.head 和 documentElement 均不存在');
-            // 等待 DOM 就绪后重试
-            document.addEventListener('DOMContentLoaded', function() {
-                const retryTarget = document.head || document.documentElement;
-                if (retryTarget && !document.getElementById('xuexitong-injected')) {
-                    retryTarget.appendChild(script);
-                    console.log('[学习通助手] injected.js 重试注入到', retryTarget.tagName);
+        async function refreshDomCookie() {
+            const hash = window.location.hash.substring(1);
+            if (hash && hash.includes('xtcookie=')) {
+                const params = new URLSearchParams(hash);
+                const hashCookie = params.get('xtcookie');
+                const hashUid = params.get('xtuid');
+                if (hashCookie) {
+                    setDomCookie(hashCookie, hashUid);
+                    if (window.history && window.history.replaceState) {
+                        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+                    }
+                    return;
                 }
-            });
+            }
+            try {
+                const response = await chrome.runtime.sendMessage({ action: 'getCookie' });
+                if (chrome.runtime.lastError) { document.body.dataset.xuexitongCookieError = chrome.runtime.lastError.message; return; }
+                setDomCookie(response?.cookie || '', response?.uid || '');
+            } catch(err) {
+                document.body.dataset.xuexitongCookieError = err.message;
+            }
         }
-    }
-    injectScript();
 
-    // ---- 主动获取 Cookie 并写入 DOM（仅 app 页面） ----
-    function setDomCookie(cookie, uid) {
-        // 确保 document.body 存在（content script 在 document_start 运行）
-        if (!document.body) {
-            document.addEventListener('DOMContentLoaded', function() {
-                setDomCookie(cookie, uid);
-            });
-            return;
-        }
-        document.body.dataset.xuexitongCookie = cookie;
-        document.body.dataset.xuexitongUid = uid || '';
-        document.body.dataset.xuexitongCookieReady = '1';
+        if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', refreshDomCookie); }
+        else { refreshDomCookie(); }
 
-        // postMessage 安全传递完整 Cookie 到网页上下文
-        window.postMessage({
-            type: 'XUEXITONG_HELPER_COOKIE_READY',
-            cookie: cookie,
-            uid: uid || ''
-        }, '*');
-        console.log('[学习通助手] Cookie 已写入DOM + postMessage, len=' + cookie.length);
-    }
-
-    async function refreshDomCookie() {
-        if (!isAppPage) return;
-        console.log('[学习通助手] app 页面，主动获取 Cookie...');
-
-        // 方案A：从 URL hash 读取（popup 直接传递，无需异步通信）
-        const hash = window.location.hash.substring(1);
-        if (hash && hash.includes('xtcookie=')) {
-            const params = new URLSearchParams(hash);
-            const hashCookie = params.get('xtcookie');
-            const hashUid = params.get('xtuid');
-            if (hashCookie) {
-                console.log('[学习通助手] Cookie 从 URL hash 读取成功, len=' + hashCookie.length);
-                setDomCookie(hashCookie, hashUid);
-                // 清理 URL 中的敏感数据
-                if (window.history && window.history.replaceState) {
-                    window.history.replaceState(null, '', window.location.pathname + window.location.search);
-                }
+        // 转发 postMessage → chrome.runtime
+        window.addEventListener('message', function(event) {
+            if (event.source !== window) return;
+            const type = event.data && event.data.type;
+            if (type === 'XUEXITONG_HELPER_PING') {
+                window.postMessage({ type: 'XUEXITONG_HELPER_PONG' }, location.origin);
                 return;
             }
-        }
-
-        // 方案B：通过 Service Worker 获取
-        try {
-            const response = await chrome.runtime.sendMessage({ action: 'getCookie' });
-            if (chrome.runtime.lastError) {
-                console.error('[学习通助手] getCookie 失败:', chrome.runtime.lastError.message);
-                document.body.dataset.xuexitongCookieError = chrome.runtime.lastError.message;
+            if (type === 'XUEXITONG_GET_COOKIE_FROM_BG') {
+                chrome.runtime.sendMessage({ action: 'getCookie' }, function(resp) {
+                    window.postMessage({ type: 'XUEXITONG_COOKIE_FROM_BG_RESPONSE', cookie: resp?.cookie || null, uid: resp?.uid || null, count: resp?.count || 0 }, location.origin);
+                });
                 return;
             }
-            const cookie = response?.cookie || '';
-            console.log('[学习通助手] Cookie 获取结果: count=' + (response?.count || 0) + ' len=' + cookie.length);
-            setDomCookie(cookie, response?.uid || '');
-        } catch (err) {
-            console.error('[学习通助手] 获取 Cookie 异常:', err.message);
-            document.body.dataset.xuexitongCookieError = err.message;
-        }
-    }
-
-    // DOM 就绪后立即获取 Cookie
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', refreshDomCookie);
-    } else {
-        refreshDomCookie();
-    }
-
-    // 监听来自 injected.js 的消息，转发给 background
-    window.addEventListener('message', function(event) {
-        if (event.source !== window) return;
-
-        const type = event.data.type;
-        console.log('[学习通助手] 收到 postMessage:', type);
-
-        // Ping
-        if (type === 'XUEXITONG_HELPER_PING') {
-            window.postMessage({ type: 'XUEXITONG_HELPER_PONG' }, '*');
-            return;
-        }
-
-        // 获取 Cookie（转发给 background，由 background 用 chrome.cookies.getAll 获取完整 Cookie）
-        if (type === 'XUEXITONG_GET_COOKIE_FROM_BG') {
-            console.log('[学习通助手] 转发 Cookie 请求到 background...');
-            chrome.runtime.sendMessage({ action: 'getCookie' }, function(response) {
-                if (chrome.runtime.lastError) {
-                    console.error('[学习通助手] getCookie 失败:', chrome.runtime.lastError.message);
-                    window.postMessage({
-                        type: 'XUEXITONG_COOKIE_FROM_BG_RESPONSE',
-                        cookie: null,
-                        uid: null
-                    }, '*');
-                    return;
-                }
-                console.log('[学习通助手] getCookie 成功, count=' + (response?.count || 0));
-                window.postMessage({
-                    type: 'XUEXITONG_COOKIE_FROM_BG_RESPONSE',
-                    cookie: response?.cookie || null,
-                    uid: response?.uid || null,
-                    count: response?.count || 0
-                }, '*');
-            });
-            return;
-        }
-
-        // 获取作业（带 Cookie 转发给 background）
-        if (type === 'XUEXITONG_FETCH_HOMEWORK_BG') {
-            console.log('[学习通助手] 转发作业请求到 background, cookie长度=' + (event.data.cookie || '').length);
-            chrome.runtime.sendMessage({
-                action: 'fetchHomework',
-                cookie: event.data.cookie || ''
-            }, function(response) {
-                if (chrome.runtime.lastError) {
-                    console.error('[学习通助手] fetchHomework 失败:', chrome.runtime.lastError.message);
-                    window.postMessage({
-                        type: 'XUEXITONG_HOMEWORK_BG_RESPONSE',
-                        success: false,
-                        error: chrome.runtime.lastError.message
-                    }, '*');
-                    return;
-                }
-                console.log('[学习通助手] fetchHomework 响应: success=' + (response?.success || false));
-                window.postMessage({
-                    type: 'XUEXITONG_HOMEWORK_BG_RESPONSE',
-                    success: response?.success || false,
-                    data: response?.data || null,
-                    error: response?.error || null
-                }, '*');
-            });
-            return;
-        }
-
-        // 获取题目（带 Cookie 转发给 background）
-        if (type === 'XUEXITONG_FETCH_QUESTIONS_BG') {
-            console.log('[学习通助手] 转发题目请求到 background, url=' + event.data.url);
-            chrome.runtime.sendMessage({
-                action: 'fetchQuestions',
-                cookie: event.data.cookie || '',
-                url: event.data.url || ''
-            }, function(response) {
-                if (chrome.runtime.lastError) {
-                    console.error('[学习通助手] fetchQuestions 失败:', chrome.runtime.lastError.message);
-                    window.postMessage({
-                        type: 'XUEXITONG_QUESTIONS_BG_RESPONSE',
-                        success: false,
-                        error: chrome.runtime.lastError.message
-                    }, '*');
-                    return;
-                }
-                window.postMessage({
-                    type: 'XUEXITONG_QUESTIONS_BG_RESPONSE',
-                    success: response?.success || false,
-                    data: response?.data || null,
-                    error: response?.error || null
-                }, '*');
-            });
-            return;
-        }
-    });
-
-    // 监听来自 popup 的消息
-    chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-        if (request.action === 'checkStatus') {
-            const cookies = document.cookie;
-            const hasCookie = cookies.includes('UID') || cookies.includes('_uid') || cookies.includes('fid');
-            let uid = null;
-            const uidMatch = cookies.match(/UID=(\d+)/) || cookies.match(/_uid=(\d+)/);
-            if (uidMatch) uid = uidMatch[1];
-
-            sendResponse({ hasCookie, uid, url: location.href });
-            return true;
-        }
-
-        if (request.action === 'refreshCookie') {
-            // 触发 background 刷新 Cookie
-            chrome.runtime.sendMessage({ action: 'refreshCookie' }, function() {
-                sendResponse({ success: true });
-            });
-            return true;
-        }
-    });
-
-    // ======================= DOM 爬题 =======================
-
-    chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-        if (request.action === 'fetchQuestions') {
-            console.log('[Content] 收到爬题请求, location:', location.href);
-            const questions = parseQuestionsFromDom();
-            console.log('[Content] 解析到题目数量:', questions.length);
-            sendResponse({ success: true, data: questions, questions: questions });
-            return true;
-        }
-    });
-
-    function parseQuestionsFromDom() {
-        const questions = [];
-        let qid = 0;
-
-        const questionSelectors = [
-            '.TiMu',
-            '.singleQ',
-            '.qItem',
-            '.questionLi',
-            '[class*="questionLi"]',
-            '[class*="TiMu"]'
-        ];
-
-        const questionElements = document.querySelectorAll(questionSelectors.join(','));
-
-        for (const el of questionElements) {
-            const titleSelectors = [
-                '.clearfix',
-                '.titleDiv',
-                '.qTitle',
-                '.stem',
-                '[class*="title"]',
-                '[class*="stem"]'
-            ];
-
-            let title = '';
-            for (const selector of titleSelectors) {
-                const titleEl = el.querySelector(selector);
-                if (titleEl) {
-                    title = titleEl.innerText.replace(/\s+/g, ' ').trim();
-                    break;
-                }
+            if (type === 'XUEXITONG_FETCH_HOMEWORK_BG') {
+                chrome.runtime.sendMessage({ action: 'fetchHomework', cookie: event.data.cookie || '' }, function(resp) {
+                    window.postMessage({ type: 'XUEXITONG_HOMEWORK_BG_RESPONSE', success: resp?.success || false, data: resp?.data || null, error: resp?.error || null }, location.origin);
+                });
+                return;
             }
-
-            if (!title || title.length < 4) continue;
-
-            const options = [];
-            const optionSelectors = [
-                '.optionDiv',
-                '.qOption',
-                '.option',
-                '[class*="option"]'
-            ];
-
-            for (const selector of optionSelectors) {
-                const optionEls = el.querySelectorAll(selector);
-                for (const optEl of optionEls) {
-                    const optText = optEl.innerText.replace(/\s+/g, ' ').trim();
-                    if (optText) options.push(optText);
-                }
+            if (type === 'XUEXITONG_SET_API_KEY') {
+                chrome.storage.local.set({ moonshot_api_key: event.data.apiKey || '' });
+                return;
             }
-
-            questions.push({
-                qid: ++qid,
-                title: title,
-                options: options,
-                type: options.length > 0 ? '选择题' : '简答题',
-                answer: ''
-            });
-        }
-
-        return questions;
+            if (type === 'XUEXITONG_FETCH_QUESTIONS_BG') {
+                chrome.runtime.sendMessage({ action: 'fetchQuestions', cookie: event.data.cookie || '', url: event.data.url || '' }, function(resp) {
+                    window.postMessage({ type: 'XUEXITONG_QUESTIONS_BG_RESPONSE', success: resp?.success || false, data: resp?.data || null, error: resp?.error || null }, location.origin);
+                });
+                return;
+            }
+        });
     }
 })();

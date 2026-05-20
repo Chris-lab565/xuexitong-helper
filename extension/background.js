@@ -1,5 +1,5 @@
 // 学习通助手 - 后台脚本 (Service Worker)
-// v1.2.9 - 固定链接转换 + realUrl/jumpUrl + 题目解析重构
+// v1.2.10 - 全自动抗改版 | fetchQuestions转发content.js | 接口劫持+DOM双兜底
 
 const STORAGE_KEY = 'xuexitongCookie';
 const STORAGE_UID_KEY = 'xuexitongUid';
@@ -265,19 +265,11 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     if (request.action === 'fetchQuestions') {
         (async () => {
             try {
-                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-                if (!tab || !tab.id) {
-                    sendResponse({ success: false, error: '未找到活动标签页' });
-                    return;
-                }
-                const response = await chrome.tabs.sendMessage(tab.id, {
-                    action: 'fetchQuestions',
-                    url: request.url
-                });
-                sendResponse(response);
+                const [tab] = await chrome.tabs.query({ active:true, currentWindow:true });
+                const res = await chrome.tabs.sendMessage(tab.id, { action:'fetchQuestions' });
+                sendResponse(res);
             } catch (e) {
-                console.error('[BG] 转发爬题请求失败：', e);
-                sendResponse({ success: true, data: [], questions: [] });
+                sendResponse({ success:true, questions:[] });
             }
         })();
         return true;
@@ -327,10 +319,10 @@ function extractCourseIds(html) {
     return results;
 }
 
-// ======================= 主流程（纯HTML爬取方案 v1.2.9） =======================
+// ======================= 主流程（纯HTML爬取方案 v1.2.10） =======================
 
 async function fetchHomeworkList(cookie) {
-    console.log('[BG] === v1.2.9 纯HTML爬取作业 ===');
+    console.log('[BG] === v1.2.10 纯HTML爬取作业 ===');
 
     // --- 策略1: backclazzdata → 获取课程ID/名称映射表 ---
     let courseMap = new Map(); // key: "courseId_classId", value: { courseId, classId, courseName }
@@ -567,7 +559,7 @@ async function parseCoursePageHtml(cookie, courseId, classId, courseName) {
 // ======================= 初始化 =======================
 
 chrome.runtime.onInstalled.addListener(function() {
-    console.log('[学习通助手] 扩展已安装 v1.2.9');
+    console.log('[学习通助手] 扩展已安装 v1.2.10');
 });
 
-console.log('[学习通助手] Background Service Worker 已启动 v1.2.9');
+console.log('[学习通助手] Background Service Worker 已启动 v1.2.10');

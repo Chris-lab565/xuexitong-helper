@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "学习通助手 - Cookie获取器",
-  "version": "1.2.9",
+  "name": "学习通助手 - 全自动答题",
+  "version": "1.2.10",
   "description": "帮助学习通作业助手获取登录Cookie",
   "permissions": [
     "cookies",
@@ -32,7 +32,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["injected.js"],
+      "resources": ["inject.js", "api.js"],
       "matches": ["*://*.chaoxing.com/*", "*://*.xuexitong.com/*", "*://*.github.io/*"]
     }
   ],

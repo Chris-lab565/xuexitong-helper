@@ -314,6 +314,7 @@
             }
             
             localStorage.setItem('moonshot_api_key', apiKey);
+            try { window.postMessage({ type: 'XUEXITONG_SET_API_KEY', apiKey: apiKey }, '*'); } catch(e) {}
             showApiKeyStatus('API Key 已保存', 'ok');
         }
 
