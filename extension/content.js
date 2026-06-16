@@ -242,9 +242,47 @@
                 }
             });
 
-            // 作业标题
-            const titleEl = document.querySelector('h1, .workTitle, .work-title, [class*="title"]');
-            if (titleEl) params.title = titleEl.textContent.trim().substring(0, 50);
+            // 作业标题（从页面顶部大标题提取）
+            const titleEl = document.querySelector('.workTitle, .work-title, h1');
+            if (titleEl) params.title = titleEl.textContent.trim().substring(0, 80);
+
+            // ===== 题目解析 =====
+            const questions = [];
+            document.querySelectorAll('li.singleQuesId').forEach((qEl, idx) => {
+                const h3 = qEl.querySelector('h3.mark_name');
+                if (!h3) return;
+
+                // 题型：从 span.colorShallow 提取，如"简答题"
+                const typeSpan = h3.querySelector('span.colorShallow');
+                const typeText = typeSpan ? typeSpan.textContent.replace(/[（）()]/g, '').trim() : '简答题';
+
+                // 题目内容：h3 里所有 <p> 的文字拼接
+                const contentParts = [];
+                h3.querySelectorAll('p').forEach(p => {
+                    const t = p.innerText.trim();
+                    if (t) contentParts.push(t);
+                });
+                const content = contentParts.join('\n').trim();
+                if (!content) return;
+
+                // 题目ID：从隐藏 input name="answertype{id}" 提取
+                const answerInput = qEl.querySelector('input[name^="answertype"]');
+                const qid = answerInput ? answerInput.name.replace('answertype', '') : String(idx + 1);
+                const answerType = answerInput ? answerInput.value : '4';
+
+                // 选项（选择题/判断题）
+                const options = [];
+                qEl.querySelectorAll('.answerList li, .optionList li, [class*="option"] li').forEach(opt => {
+                    const t = opt.innerText.trim();
+                    if (t) options.push(t);
+                });
+
+                questions.push({ qid, type: typeText, answerType, content, options });
+                console.log(`[学习通助手] 题目${idx+1}(${typeText}):`, content.substring(0, 60));
+            });
+
+            console.log('[学习通助手] 共解析题目:', questions.length);
+            params.questions = questions;
 
             if (params.courseId && params.classId) {
                 console.log('[学习通助手] 提取到作业参数:', JSON.stringify(params));
@@ -255,10 +293,10 @@
                     if (chrome.runtime.lastError) return;
                     if (response && response.success && response.submitUrl) {
                         console.log('[学习通助手] 收件箱作业提交链接已生成:', response.submitUrl);
-                        // 存入 sessionStorage 供前端页面读取
                         try {
                             sessionStorage.setItem('xt_inbox_submit_url', response.submitUrl);
                             sessionStorage.setItem('xt_inbox_title', response.title || '');
+                            sessionStorage.setItem('xt_inbox_questions', JSON.stringify(questions));
                         } catch(e) {}
                         // postMessage 通知注入脚本
                         window.postMessage({
@@ -267,7 +305,8 @@
                             title: response.title || '',
                             courseId: response.courseId,
                             classId: response.classId,
-                            workId: response.workId
+                            workId: response.workId,
+                            questions
                         }, '*');
                     }
                 });
