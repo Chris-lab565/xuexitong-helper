@@ -1,11 +1,11 @@
-// 学习通助手 - 注入脚本 v1.2.0
+// 学习通助手 - 注入脚本 v1.2.10
 // 运行在页面上下文中，可访问 document.cookie
 // 通过 postMessage 与 content.js 通信，content.js 再与 background.js 通信
 
 (function() {
     'use strict';
 
-    console.log('[学习通助手] 注入脚本已加载 v1.2.0 hostname:', location.hostname, 'href:', location.href);
+    console.log('[学习通助手] 注入脚本已加载 v1.2.10 hostname:', location.hostname, 'href:', location.href);
 
     const hostname = location.hostname;
     const isXuexitongPage = hostname.includes('chaoxing.com') || hostname.includes('xuexitong.com');
@@ -65,7 +65,7 @@
             return;
         }
 
-        // 获取作业列表（统一走 background.js 代理 — v1.2.0）
+        // 获取作业列表（统一走 background.js 代理 — v1.2.10）
         if (type === 'XUEXITONG_HELPER_FETCH_HOMEWORK') {
             const cookie = event.data.cookie || '';
             console.log('[学习通助手] 收到获取作业请求, cookie长度=' + cookie.length);

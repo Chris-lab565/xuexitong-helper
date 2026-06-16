@@ -1,10 +1,10 @@
-// 学习通助手 - 内容脚本 v1.2.1
+// 学习通助手 - 内容脚本 v1.2.10
 // 注入到所有匹配页面，桥接网页 ↔ 扩展后台（postMessage安全传递完整Cookie）
 
 (function() {
     'use strict';
 
-    console.log('[学习通助手] 内容脚本已加载 v1.2.1 location:', location.href, 'readyState:', document.readyState);
+    console.log('[学习通助手] 内容脚本已加载 v1.2.10 location:', location.href, 'readyState:', document.readyState);
 
     const hostname = location.hostname;
     const isXuexitongPage = hostname.includes('chaoxing.com') || hostname.includes('xuexitong.com');
@@ -203,6 +203,88 @@
             return;
         }
     });
+
+    // ======================= 收件箱作业参数自动提取 =======================
+    // 当用户打开作业作答页面时（mooc2/work/dowork），自动提取隐藏参数并通知 background
+
+    function extractInboxHomeworkParams() {
+        const url = location.href;
+        if (!url.includes('/work/dowork') && !url.includes('/mooc2/work/')) return;
+
+        console.log('[学习通助手] 检测到作业作答页面，开始提取参数...');
+
+        function doExtract() {
+            const fields = [
+                'courseId', 'classId', 'cpi', 'workRelationId', 'workAnswerId',
+                'standardEnc', 'enc_work', 'jobid', 'knowledgeid'
+            ];
+            const params = {};
+
+            // 从隐藏 input 提取
+            document.querySelectorAll('input[type="hidden"]').forEach(el => {
+                if (el.name && fields.includes(el.name)) {
+                    params[el.name] = el.value;
+                }
+            });
+
+            // enc 参数（无 name 的隐藏 input，值为32位MD5）
+            document.querySelectorAll('input[type="hidden"]').forEach(el => {
+                if (!el.name && el.value && /^[a-f0-9]{32}$/.test(el.value)) {
+                    if (!params.enc) params.enc = el.value;
+                }
+            });
+
+            // 从 URL 补充缺失参数
+            const urlParams = new URLSearchParams(location.search);
+            ['courseId','classId','cpi','workId','answerId','standardEnc','enc'].forEach(key => {
+                if (!params[key] && urlParams.get(key)) {
+                    params[key] = urlParams.get(key);
+                }
+            });
+
+            // 作业标题
+            const titleEl = document.querySelector('h1, .workTitle, .work-title, [class*="title"]');
+            if (titleEl) params.title = titleEl.textContent.trim().substring(0, 50);
+
+            if (params.courseId && params.classId) {
+                console.log('[学习通助手] 提取到作业参数:', JSON.stringify(params));
+                chrome.runtime.sendMessage({
+                    action: 'extractInboxHomework',
+                    params
+                }, function(response) {
+                    if (chrome.runtime.lastError) return;
+                    if (response && response.success && response.submitUrl) {
+                        console.log('[学习通助手] 收件箱作业提交链接已生成:', response.submitUrl);
+                        // 存入 sessionStorage 供前端页面读取
+                        try {
+                            sessionStorage.setItem('xt_inbox_submit_url', response.submitUrl);
+                            sessionStorage.setItem('xt_inbox_title', response.title || '');
+                        } catch(e) {}
+                        // postMessage 通知注入脚本
+                        window.postMessage({
+                            type: 'XUEXITONG_INBOX_HOMEWORK_READY',
+                            submitUrl: response.submitUrl,
+                            title: response.title || '',
+                            courseId: response.courseId,
+                            classId: response.classId,
+                            workId: response.workId
+                        }, '*');
+                    }
+                });
+            } else {
+                console.log('[学习通助手] 参数不足，跳过（courseId/classId 缺失）');
+            }
+        }
+
+        // DOM 就绪后执行
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', doExtract);
+        } else {
+            doExtract();
+        }
+    }
+
+    extractInboxHomeworkParams();
 
     // 监听来自 popup 的消息
     chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {

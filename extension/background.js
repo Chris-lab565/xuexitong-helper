@@ -1,5 +1,5 @@
 // 学习通助手 - 后台脚本 (Service Worker)
-// v1.2.9 - 固定链接转换 + realUrl/jumpUrl + 题目解析重构
+// v1.2.10 - 固定链接转换 + realUrl/jumpUrl + 题目解析重构
 
 const STORAGE_KEY = 'xuexitongCookie';
 const STORAGE_UID_KEY = 'xuexitongUid';
@@ -172,35 +172,85 @@ async function getWorkQuestions(url) {
       method: 'GET',
       credentials: 'include',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
         'Referer': 'https://mooc1.chaoxing.com/'
       }
     });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
     const html = await response.text();
+    console.log('[BG] 题目页面加载成功，长度：', html.length);
+
     const questions = [];
     let qid = 0;
+
     const reg = /<div.*?(?:TiMu|singleQ|qItem)[\s\S]*?<\/div>\s*<\/div>/g;
     let match;
+
     while ((match = reg.exec(html)) !== null) {
       const item = match[0];
+
       const titleMatch = item.match(/<div.*?(?:clearfix|titleDiv|qTitle)[\s\S]*?>([\s\S]*?)<\/div>/);
       if (!titleMatch) continue;
-      const title = titleMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
+      const title = titleMatch[1]
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
       if (!title || title.length < 4) continue;
+
       const options = [];
       const optReg = /<div.*?(?:optionDiv|qOption)[\s\S]*?>([\s\S]*?)<\/div>/g;
       let optMatch;
       while ((optMatch = optReg.exec(item)) !== null) {
-        const opt = optMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        const opt = optMatch[1]
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
         if (opt) options.push(opt);
       }
-      questions.push({ qid: ++qid, title, options, type: options.length ? '选择题' : '简答题', answer: '' });
+
+      questions.push({
+        qid: ++qid,
+        title: title,
+        options: options,
+        type: options.length > 0 ? "选择题/判断题" : "简答题",
+        answer: ""
+      });
     }
+
+    console.log('[BG] 解析到题目数量：', questions.length);
     return questions;
-  } catch (e) {
-    console.error(e);
+  } catch (error) {
+    console.error('[BG] 获取题目失败：', error);
     return [];
   }
+}
+
+// ======================= 收件箱作业参数提取 =======================
+
+// 从作业作答页面的隐藏 input 字段中提取所有必要参数，构造可直接跳转的提交链接
+function buildSubmitUrlFromParams(params) {
+    const courseId     = params.courseId || '';
+    const classId      = params.classId || '';
+    const cpi          = params.cpi || '';
+    const workId       = params.workRelationId || params.workId || '';
+    const answerId     = params.workAnswerId || params.answerId || '';
+    const standardEnc  = params.standardEnc || '';
+    const enc          = params.enc || '';
+
+    if (!courseId || !classId || !workId) return '';
+
+    let url = `https://mooc1-api.chaoxing.com/mooc-ans/mooc2/work/dowork?courseId=${courseId}&classId=${classId}&workId=${workId}`;
+    if (cpi)         url += `&cpi=${cpi}`;
+    if (answerId)    url += `&answerId=${answerId}`;
+    if (standardEnc) url += `&standardEnc=${standardEnc}`;
+    if (enc)         url += `&enc=${enc}`;
+    return url;
 }
 
 // ======================= 消息路由 =======================
@@ -262,10 +312,40 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         return true;
     }
 
+    // 收件箱作业：接收 content.js 从页面提取的参数，构造提交链接
+    if (request.action === 'extractInboxHomework') {
+        const params = request.params || {};
+        const submitUrl = buildSubmitUrlFromParams(params);
+        const title = params.title || '作业';
+        console.log('[BG] 收件箱作业提交链接:', submitUrl);
+        sendResponse({
+            success: !!submitUrl,
+            submitUrl,
+            title,
+            courseId: params.courseId || '',
+            classId: params.classId || '',
+            workId: params.workRelationId || params.workId || ''
+        });
+        return true;
+    }
+
     if (request.action === 'fetchQuestions') {
         (async () => {
-            const questions = await getWorkQuestions(request.url);
-            sendResponse({ success: true, data: questions, questions: questions });
+            let cookie = request.cookie || '';
+            if (!cookie) {
+                const result = await getAllChaoxingCookies();
+                cookie = result.cookie;
+            }
+            if (!cookie) {
+                sendResponse({ success: false, error: '没有可用的 Cookie' });
+                return;
+            }
+            try {
+                const questions = await getWorkQuestions(request.url);
+                sendResponse({ success: true, data: questions });
+            } catch (err) {
+                sendResponse({ success: false, error: '网络错误: ' + err.message });
+            }
         })();
         return true;
     }
@@ -314,10 +394,10 @@ function extractCourseIds(html) {
     return results;
 }
 
-// ======================= 主流程（纯HTML爬取方案 v1.2.9） =======================
+// ======================= 主流程（纯HTML爬取方案 v1.2.10） =======================
 
 async function fetchHomeworkList(cookie) {
-    console.log('[BG] === v1.2.9 纯HTML爬取作业 ===');
+    console.log('[BG] === v1.2.10 纯HTML爬取作业 ===');
 
     // --- 策略1: backclazzdata → 获取课程ID/名称映射表 ---
     let courseMap = new Map(); // key: "courseId_classId", value: { courseId, classId, courseName }
@@ -489,7 +569,7 @@ function parseHomeworkFromHtml(html) {
                     status,
                     courseName,
                     officialUrl,
-                    submitUrl: `https://mooc1.chaoxing.com/mooc-ans/work/doHomeWork?courseId=${courseId}&classId=${classId}&workId=${workId}`
+                    submitUrl: officialUrl
                 });
             }
         }
@@ -554,7 +634,7 @@ async function parseCoursePageHtml(cookie, courseId, classId, courseName) {
 // ======================= 初始化 =======================
 
 chrome.runtime.onInstalled.addListener(function() {
-    console.log('[学习通助手] 扩展已安装 v1.2.9');
+    console.log('[学习通助手] 扩展已安装 v1.2.10');
 });
 
-console.log('[学习通助手] Background Service Worker 已启动 v1.2.9');
+console.log('[学习通助手] Background Service Worker 已启动 v1.2.10');
