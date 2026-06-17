@@ -248,7 +248,7 @@
 
             // ===== 题目解析 =====
             const questions = [];
-            document.querySelectorAll('li.singleQuesId').forEach((qEl, idx) => {
+            document.querySelectorAll('.singleQuesId').forEach((qEl, idx) => {
                 const h3 = qEl.querySelector('h3.mark_name');
                 if (!h3) return;
 
