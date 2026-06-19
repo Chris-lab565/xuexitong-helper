@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>学习通作业助手 - 主应用</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/docx/8.5.0/index.umd.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <style>
         .apikey-section {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -119,6 +123,90 @@
         .debug-step.success { color: #a6e3a1; }
         .debug-step.error { color: #f38ba8; }
         .debug-step.pending { color: #6c7086; }
+
+        /* 图片上传区域 */
+        .image-upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 10px;
+            text-align: center;
+            background: #fafafa;
+        }
+        .image-upload-area.dragover {
+            border-color: #667eea;
+            background: #f0f0ff;
+        }
+        .image-upload-btn {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            border: none;
+        }
+        .image-upload-btn:hover {
+            background: #5568d3;
+        }
+        .image-preview-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+            justify-content: center;
+        }
+        .image-preview-item {
+            position: relative;
+            width: 70px;
+            height: 70px;
+        }
+        .image-preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .image-preview-remove {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            width: 20px;
+            height: 20px;
+            background: #f44336;
+            color: white;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1;
+        }
+        .image-upload-hint {
+            font-size: 12px;
+            color: #999;
+            margin-top: 6px;
+        }
+
+        /* 导出按钮 */
+        .export-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .export-btn {
+            background: #f0f0f0;
+            color: #444;
+            border: 1px solid #ddd;
+            padding: 6px 12px;
+            border-radius: 5px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .export-btn:hover {
+            background: #e0e0e0;
+        }
     </style>
 </head>
 <body>
@@ -509,12 +597,17 @@
                         <h4 style="margin-bottom: 15px; color: #667eea;">${title}</h4>
                         <p style="color: #856404; margin-bottom: 10px; font-size: 13px;">⚠️ 自动解析失败，可手动粘贴题目内容</p>
                         <textarea id="manualQuestion-${workId}" style="width:100%;height:120px;padding:10px;border:1px solid #ddd;border-radius:5px;font-size:14px;resize:vertical;box-sizing:border-box;" placeholder="解析失败，请在此粘贴题目内容"></textarea>
+                        ${renderImageUploadArea(workId + '_manual')}
                         <div style="margin-top: 10px;">
                             <button class="btn btn-small" onclick="generateAnswerFromTextarea('${workId}')">🤖 AI生成答案</button>
                         </div>
                         <div id="answer-${workId}_manual" class="answer-box" style="display: none; margin-top: 10px;">
                             <p class="answer-content">生成中...</p>
-                            <button class="btn btn-small" onclick="copyAnswer('${workId}_manual')">📋 复制</button>
+                            <div class="export-actions">
+                                <button class="btn btn-small" onclick="copyAnswer('${workId}_manual')">📋 复制</button>
+                                <button class="export-btn" onclick="exportAnswerAsWord('${workId}_manual', '${title.replace(/'/g, "\\'")}')">📄 导出Word</button>
+                                <button class="export-btn" onclick="exportAnswerAsPdf('${workId}_manual', '${title.replace(/'/g, "\\'")}')">📑 导出PDF</button>
+                            </div>
                         </div>
                     `;
                     return;
@@ -524,6 +617,7 @@
 
                 questions.forEach((q, idx) => {
                     const safeTitle = (q.title || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    const qKey = `${workId}_${q.qid}`;
 
                     html += `
                         <div class="question-box" style="margin-bottom: 15px;">
@@ -533,12 +627,17 @@
                                     ${q.options.map(opt => `<p style="margin: 3px 0;">${opt}</p>`).join('')}
                                 </div>
                             ` : ''}
+                            ${renderImageUploadArea(qKey)}
                             <div class="answer-actions" style="margin-top: 10px;">
-                                <button class="btn btn-small" onclick="generateAnswer('${workId}_${q.qid}', '${safeTitle}')">🤖 AI生成答案</button>
+                                <button class="btn btn-small" onclick="generateAnswer('${qKey}', '${safeTitle}')">🤖 AI生成答案</button>
                             </div>
-                            <div id="answer-${workId}_${q.qid}" class="answer-box" style="display: none; margin-top: 10px;">
+                            <div id="answer-${qKey}" class="answer-box" style="display: none; margin-top: 10px;">
                                 <p class="answer-content">生成中...</p>
-                                <button class="btn btn-small" onclick="copyAnswer('${workId}_${q.qid}')">📋 复制</button>
+                                <div class="export-actions">
+                                    <button class="btn btn-small" onclick="copyAnswer('${qKey}')">📋 复制</button>
+                                    <button class="export-btn" onclick="exportAnswerAsWord('${qKey}', '${safeTitle}')">📄 导出Word</button>
+                                    <button class="export-btn" onclick="exportAnswerAsPdf('${qKey}', '${safeTitle}')">📑 导出PDF</button>
+                                </div>
                             </div>
                         </div>
                     `;
@@ -551,6 +650,153 @@
             }
         }
 
+        // ===== 图片上传相关 =====
+        // 每道题的已上传图片缓存：{ qKey: [base64dataUrl, ...] }
+        const questionImages = {};
+
+        // 渲染图片上传区域 HTML
+        function renderImageUploadArea(qKey) {
+            return `
+                <div class="image-upload-area" id="uploadArea-${qKey}">
+                    <label class="image-upload-btn">
+                        📷 上传题目图片/截图（可选）
+                        <input type="file" accept="image/*" multiple style="display:none;" onchange="handleImageSelect('${qKey}', this.files)">
+                    </label>
+                    <div class="image-upload-hint">支持PPT截图、题目配图等，AI会结合图片内容回答</div>
+                    <div class="image-preview-list" id="previewList-${qKey}"></div>
+                </div>
+            `;
+        }
+
+        // 处理图片选择
+        async function handleImageSelect(qKey, files) {
+            if (!files || files.length === 0) return;
+            if (!questionImages[qKey]) questionImages[qKey] = [];
+
+            for (const file of files) {
+                if (!file.type.startsWith('image/')) continue;
+                try {
+                    const dataUrl = await api.fileToBase64(file);
+                    questionImages[qKey].push(dataUrl);
+                } catch (e) {
+                    console.error('图片读取失败', e);
+                }
+            }
+            renderImagePreviews(qKey);
+        }
+
+        // 渲染已上传图片的缩略图预览
+        function renderImagePreviews(qKey) {
+            const listEl = document.getElementById(`previewList-${qKey}`);
+            if (!listEl) return;
+            const images = questionImages[qKey] || [];
+            listEl.innerHTML = images.map((img, i) => `
+                <div class="image-preview-item">
+                    <img src="${img}" alt="预览${i+1}">
+                    <button class="image-preview-remove" onclick="removeImage('${qKey}', ${i})">×</button>
+                </div>
+            `).join('');
+        }
+
+        // 移除某张已上传图片
+        function removeImage(qKey, index) {
+            if (questionImages[qKey]) {
+                questionImages[qKey].splice(index, 1);
+                renderImagePreviews(qKey);
+            }
+        }
+
+        // ===== 导出 Word / PDF =====
+        // 导出答案为 Word 文档
+        async function exportAnswerAsWord(qKey, title) {
+            const answerBox = document.getElementById(`answer-${qKey}`);
+            const answerText = answerBox.querySelector('.answer-content').textContent;
+
+            if (!window.docx) {
+                alert('导出库加载中，请稍后再试');
+                return;
+            }
+
+            const { Document, Packer, Paragraph, TextRun, HeadingLevel } = window.docx;
+
+            const paragraphs = [
+                new Paragraph({
+                    text: title || '作业答案',
+                    heading: HeadingLevel.HEADING_1,
+                }),
+                new Paragraph({ text: '' }),
+            ];
+
+            // 按换行拆分答案内容，逐段写入
+            answerText.split('\n').forEach(line => {
+                paragraphs.push(new Paragraph({
+                    children: [new TextRun(line || ' ')],
+                }));
+            });
+
+            const doc = new Document({
+                sections: [{ properties: {}, children: paragraphs }],
+            });
+
+            try {
+                const blob = await Packer.toBlob(doc);
+                saveAs(blob, `${(title || '作业答案').substring(0, 30)}.docx`);
+            } catch (e) {
+                alert('导出Word失败: ' + e.message);
+            }
+        }
+
+        // 导出答案为 PDF 文档
+        function exportAnswerAsPdf(qKey, title) {
+            const answerBox = document.getElementById(`answer-${qKey}`);
+            const answerText = answerBox.querySelector('.answer-content').textContent;
+
+            if (!window.jspdf) {
+                alert('导出库加载中，请稍后再试');
+                return;
+            }
+
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+
+                // 注意：jsPDF 默认字体不支持中文，这里用浏览器自带的方式绘制图片化文字以保证中文正常显示
+                // 简单稳妥方案：把内容渲染到一个隐藏的canvas/div上再截图插入PDF
+                const tempDiv = document.createElement('div');
+                tempDiv.style.position = 'fixed';
+                tempDiv.style.left = '-9999px';
+                tempDiv.style.width = '600px';
+                tempDiv.style.padding = '20px';
+                tempDiv.style.fontFamily = 'Microsoft YaHei, SimHei, sans-serif';
+                tempDiv.style.fontSize = '14px';
+                tempDiv.style.lineHeight = '1.8';
+                tempDiv.style.whiteSpace = 'pre-wrap';
+                tempDiv.innerHTML = `<h2>${title || '作业答案'}</h2><div>${answerText.replace(/\n/g, '<br>')}</div>`;
+                document.body.appendChild(tempDiv);
+
+                if (window.html2canvas) {
+                    html2canvas(tempDiv).then(canvas => {
+                        const imgData = canvas.toDataURL('image/png');
+                        const pdfWidth = doc.internal.pageSize.getWidth();
+                        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+                        doc.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
+                        doc.save(`${(title || '作业答案').substring(0, 30)}.pdf`);
+                        document.body.removeChild(tempDiv);
+                    });
+                } else {
+                    // 没有 html2canvas 时的回退：直接用 jsPDF 文字输出（中文可能显示异常，但保证有文件可下载）
+                    doc.setFontSize(14);
+                    const lines = doc.splitTextToSize(answerText, 180);
+                    doc.text(title || '作业答案', 10, 15);
+                    doc.text(lines, 10, 25);
+                    doc.save(`${(title || '作业答案').substring(0, 30)}.pdf`);
+                    document.body.removeChild(tempDiv);
+                }
+            } catch (e) {
+                alert('导出PDF失败: ' + e.message);
+            }
+        }
+
         // 生成 AI 答案
         async function generateAnswer(workId, question) {
             const apiKey = localStorage.getItem('moonshot_api_key');
@@ -558,10 +804,11 @@
             const answerContent = answerBox.querySelector('.answer-content');
             
             answerBox.style.display = 'block';
-            answerContent.textContent = 'AI 思考中...';
+            const images = questionImages[workId] || [];
+            answerContent.textContent = images.length > 0 ? 'AI 正在结合图片分析中...' : 'AI 思考中...';
             
             try {
-                const answer = await api.generateAnswer(question, apiKey);
+                const answer = await api.generateAnswer(question, apiKey, undefined, images);
                 answerContent.textContent = answer;
             } catch (err) {
                 answerContent.textContent = '生成答案失败: ' + err.message;

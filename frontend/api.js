@@ -273,7 +273,35 @@ async function getQuestionsViaExtension(url) {
     });
 }
 
-async function getAnswer(question, apiKey, model = "moonshot-v1-8k") {
+// 将图片文件转换为 base64 data URL
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+// 生成 AI 答案，支持可选图片输入（自动切换到视觉模型）
+// images: 可选，base64 data URL 数组
+async function getAnswer(question, apiKey, model, images) {
+  const hasImages = Array.isArray(images) && images.length > 0;
+  // 有图片时必须用支持视觉的模型；没有图片用普通文字模型（更省钱更快）
+  const useModel = hasImages ? (model || 'moonshot-v1-32k-vision-preview') : (model || 'moonshot-v1-8k');
+
+  // 构造 content：纯文字用字符串，带图片用数组（文字+image_url 混合）
+  let content;
+  if (hasImages) {
+      content = [];
+      images.forEach(imgDataUrl => {
+          content.push({ type: 'image_url', image_url: { url: imgDataUrl } });
+      });
+      content.push({ type: 'text', text: '你是学习通助手。请结合上面的图片内容（可能是题目截图、PPT截图等）和下面的文字题目，给出简洁的答案或解题思路：\n' + question });
+  } else {
+      content = "你是学习通助手，只返回简洁的答案或解题思路：" + question;
+  }
+
   try {
     const response = await fetch("https://api.moonshot.cn/v1/chat/completions", {
       method: "POST",
@@ -282,12 +310,12 @@ async function getAnswer(question, apiKey, model = "moonshot-v1-8k") {
         "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: model,
+        model: useModel,
         messages: [
-          { role: "user", content: "你是学习通助手，只返回简洁的答案或解题思路：" + question }
+          { role: "user", content: content }
         ],
         temperature: 1,
-        max_tokens: 1000
+        max_tokens: 1500
       })
     });
 
@@ -305,6 +333,7 @@ async function getAnswer(question, apiKey, model = "moonshot-v1-8k") {
 // 对外暴露的 API
 const api = {
     checkExtension,
+    fileToBase64,
 
     async getHomework() {
         return getHomeworkViaExtension();
@@ -314,10 +343,10 @@ const api = {
         return getQuestionsViaExtension(doUrl);
     },
 
-    async generateAnswer(question, apiKey, model) {
-        return getAnswer(question, apiKey, model);
+    async generateAnswer(question, apiKey, model, images) {
+        return getAnswer(question, apiKey, model, images);
     },
 };
 
 window.api = api;
-debugLog('✅ api.js v1.2.7 已加载');
+debugLog('✅ api.js v1.2.10 已加载（支持图片识别）');
