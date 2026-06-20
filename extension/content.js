@@ -112,6 +112,44 @@
         refreshDomCookie();
     }
 
+    // 助手网站（app.html）打开时，主动读取 chrome.storage.local 里缓存的收件箱作业解析数据，
+    // 转发给页面（页面无法直接访问 chrome.storage，需要 content.js 中转）
+    function pushInboxHomeworkCacheToPage() {
+        if (!isAppPage) return;
+        try {
+            chrome.storage.local.get(['xuexitongInboxHomework'], (result) => {
+                if (chrome.runtime.lastError) return;
+                const all = result.xuexitongInboxHomework || {};
+                const keys = Object.keys(all);
+                if (keys.length === 0) {
+                    console.log('[学习通助手] chrome.storage 中暂无收件箱作业缓存');
+                    return;
+                }
+                console.log('[学习通助手] 从 chrome.storage 读取到', keys.length, '份收件箱作业缓存，转发给页面');
+                keys.forEach(key => {
+                    const data = all[key];
+                    window.postMessage({
+                        type: 'XUEXITONG_INBOX_HOMEWORK_READY',
+                        submitUrl: data.submitUrl,
+                        title: data.title || '',
+                        courseId: data.courseId,
+                        classId: data.classId,
+                        workId: data.workId,
+                        questions: data.questions
+                    }, '*');
+                });
+            });
+        } catch (e) {
+            console.log('[学习通助手] 读取收件箱作业缓存失败:', e.message);
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', pushInboxHomeworkCacheToPage);
+    } else {
+        pushInboxHomeworkCacheToPage();
+    }
+
     // 监听来自 injected.js 的消息，转发给 background
     window.addEventListener('message', function(event) {
         if (event.source !== window) return;
@@ -293,12 +331,39 @@
                     if (chrome.runtime.lastError) return;
                     if (response && response.success && response.submitUrl) {
                         console.log('[学习通助手] 收件箱作业提交链接已生成:', response.submitUrl);
+
+                        const homeworkData = {
+                            submitUrl: response.submitUrl,
+                            title: response.title || '',
+                            courseId: response.courseId,
+                            classId: response.classId,
+                            workId: response.workId,
+                            questions,
+                            savedAt: Date.now()
+                        };
+
+                        // 存入 chrome.storage.local（跨标签页可读，助手网站通过 background 中转读取）
+                        try {
+                            chrome.storage.local.get(['xuexitongInboxHomework'], (result) => {
+                                const all = result.xuexitongInboxHomework || {};
+                                if (response.workId) {
+                                    all[response.workId] = homeworkData;
+                                }
+                                all['__latest__'] = homeworkData;
+                                chrome.storage.local.set({ xuexitongInboxHomework: all }, () => {
+                                    console.log('[学习通助手] 作业数据已存入 chrome.storage.local');
+                                });
+                            });
+                        } catch(e) {
+                            console.log('[学习通助手] chrome.storage 写入失败:', e.message);
+                        }
+
+                        // 同时保留 sessionStorage + postMessage（同标签页内场景仍可用，不影响）
                         try {
                             sessionStorage.setItem('xt_inbox_submit_url', response.submitUrl);
                             sessionStorage.setItem('xt_inbox_title', response.title || '');
                             sessionStorage.setItem('xt_inbox_questions', JSON.stringify(questions));
                         } catch(e) {}
-                        // postMessage 通知注入脚本
                         window.postMessage({
                             type: 'XUEXITONG_INBOX_HOMEWORK_READY',
                             submitUrl: response.submitUrl,
