@@ -1,7 +1,8 @@
 /**
- * 学习通作业助手 - 前端 API 封装 v1.2.10
+ * 学习通作业助手 - 前端 API 封装 v1.2.11
  * 通过浏览器扩展获取 Cookie 并代理 API 请求
  * v1.2.10 新增：支持图片识别（视觉模型自动切换）
+ * v1.2.11 新增：对接收件箱作业自动解析数据（content.js 主动推送）
  */
 
 // 调试日志
@@ -242,8 +243,39 @@ async function getHomeworkViaExtension() {
     });
 }
 
+// ===== 收件箱作业数据缓存 =====
+// content.js 在用户打开作业作答页面时，会自动解析题目并通过 postMessage
+// 主动推送 XUEXITONG_INBOX_HOMEWORK_READY 消息，这里缓存下来供 getQuestions() 优先使用
+window.xuexitongInboxHomeworkCache = window.xuexitongInboxHomeworkCache || {};
+
+window.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'XUEXITONG_INBOX_HOMEWORK_READY') {
+        const data = event.data;
+        debugLog('✅ 收到收件箱作业解析数据 (workId=' + data.workId + ', 题目数=' + (data.questions ? data.questions.length : 0) + ')');
+        // 用 workId 作为 key 缓存，方便 getQuestions() 按需查找
+        if (data.workId) {
+            window.xuexitongInboxHomeworkCache[data.workId] = data;
+        }
+        // 同时也缓存"最新一份"，应对 workId 不一致的情况（兜底）
+        window.xuexitongInboxHomeworkCache['__latest__'] = data;
+    }
+});
+
 // 获取题目（通过扩展代理）
-async function getQuestionsViaExtension(url) {
+async function getQuestionsViaExtension(url, workId) {
+    // 优先：检查 content.js 是否已经主动推送过这个作业的解析结果（收件箱作业场景）
+    const cached = (workId && window.xuexitongInboxHomeworkCache[workId]) || window.xuexitongInboxHomeworkCache['__latest__'];
+    if (cached && cached.questions && cached.questions.length > 0) {
+        debugLog('✅ 使用收件箱作业缓存数据，跳过API请求');
+        // 转换字段名以匹配 app.html 期望的格式：title/qid/type/options
+        return cached.questions.map(q => ({
+            qid: q.qid,
+            type: q.type,
+            title: q.content,
+            options: q.options || []
+        }));
+    }
+
     const cookie = await getXuexitongCookie();
     if (!cookie) {
         throw new Error('无法获取学习通 Cookie');
@@ -341,7 +373,7 @@ const api = {
     },
 
     async getQuestions(workId, doUrl) {
-        return getQuestionsViaExtension(doUrl);
+        return getQuestionsViaExtension(doUrl, workId);
     },
 
     async generateAnswer(question, apiKey, model, images) {
@@ -350,4 +382,4 @@ const api = {
 };
 
 window.api = api;
-debugLog('✅ api.js v1.2.10 已加载（支持图片识别）');
+debugLog('✅ api.js v1.2.11 已加载（支持图片识别 + 收件箱作业自动解析对接）');
