@@ -654,13 +654,22 @@
         const questionImages = {};
 
         // 把插件自动检测到的题目图片（学习通图片URL）下载并转成 base64，加入该题图片缓存
-        // 注：因 CORS 限制，部分图片可能无法跨域下载，失败时静默跳过（不影响手动上传图片功能）
+        // 注：因 CORS/登录态限制，部分图片可能无法跨域下载（会返回HTML而非图片），失败时静默跳过
         async function loadAutoImagesForQuestion(qKey, imageUrls) {
             if (!questionImages[qKey]) questionImages[qKey] = [];
+            let successCount = 0;
 
             for (const url of imageUrls) {
                 try {
-                    const resp = await fetch(url);
+                    const resp = await fetch(url, { credentials: 'include' });
+                    const contentType = resp.headers.get('content-type') || '';
+
+                    // 校验：必须是真正的图片格式，否则说明被拦截/未授权（返回了HTML登录页等）
+                    if (!contentType.startsWith('image/')) {
+                        console.warn('[助手] 图片下载返回的不是图片格式（可能需要登录态或跨域受限）:', url, '实际类型:', contentType);
+                        continue;
+                    }
+
                     const blob = await resp.blob();
                     const dataUrl = await new Promise((resolve, reject) => {
                         const reader = new FileReader();
@@ -669,6 +678,7 @@
                         reader.readAsDataURL(blob);
                     });
                     questionImages[qKey].push(dataUrl);
+                    successCount++;
                 } catch (e) {
                     console.warn('[助手] 自动图片下载失败（可能是跨域限制），跳过:', url, e.message);
                 }
@@ -676,14 +686,17 @@
 
             // 更新预览区（如果存在）
             const previewEl = document.getElementById(`autoPreview-${qKey}`);
-            if (previewEl && questionImages[qKey].length > 0) {
-                renderImagePreviews(qKey);
-                // renderImagePreviews 默认渲染到 previewList-{qKey}，这里手动同步到 autoPreview 区域
-                previewEl.innerHTML = questionImages[qKey].map((img, i) => `
-                    <div class="image-preview-item">
-                        <img src="${img}" alt="自动识别图片${i+1}">
-                    </div>
-                `).join('');
+            if (previewEl) {
+                if (successCount > 0) {
+                    previewEl.innerHTML = questionImages[qKey].map((img, i) => `
+                        <div class="image-preview-item">
+                            <img src="${img}" alt="自动识别图片${i+1}">
+                        </div>
+                    `).join('');
+                } else {
+                    // 全部下载失败，提示用户改用手动上传
+                    previewEl.innerHTML = `<p style="color:#c62828;font-size:12px;">⚠️ 图片自动读取失败（可能受登录权限限制），请手动截图后用下方"上传题目图片"功能添加</p>`;
+                }
             }
         }
 
