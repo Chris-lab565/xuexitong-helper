@@ -1,8 +1,10 @@
 /**
- * 学习通作业助手 - 前端 API 封装 v1.2.11
+ * 学习通作业助手 - 前端 API 封装 v1.3.0
  * 通过浏览器扩展获取 Cookie 并代理 API 请求
  * v1.2.10 新增：支持图片识别（视觉模型自动切换）
  * v1.2.11 新增：对接收件箱作业自动解析数据（content.js 主动推送）
+ * v1.3.0 新增：默认通过 Cloudflare Worker 代理调用AI（公共Key+每日限流），
+ *              用户仍可填自己的 Key 以不限次数直连使用
  */
 
 // 调试日志
@@ -316,50 +318,97 @@ function fileToBase64(file) {
     });
 }
 
-// 生成 AI 答案，支持可选图片输入（自动切换到视觉模型）
+// ===== 设备ID生成（用于公共Key限流）=====
+// 每个浏览器生成一个唯一ID，存在 localStorage，用于后端按设备计数限流
+function getDeviceId() {
+    let id = localStorage.getItem('xt_device_id');
+    if (!id) {
+        id = 'dev_' + Date.now() + '_' + Math.random().toString(36).slice(2, 12);
+        localStorage.setItem('xt_device_id', id);
+    }
+    return id;
+}
+
+// Worker 代理地址（你的 Cloudflare Worker）
+const WORKER_PROXY_URL = 'https://xuexitong-ai-proxy.woaichixiaodangao.workers.dev';
+
+// 生成 AI 答案
+// - 如果用户填了自己的 apiKey：直连 Moonshot（不走代理，不计入限额）
+// - 如果用户没填 apiKey：走 Worker 代理，使用公共Key（有每日限流）
 // images: 可选，base64 data URL 数组
 async function getAnswer(question, apiKey, model, images) {
   const hasImages = Array.isArray(images) && images.length > 0;
-  // 有图片时必须用支持视觉的模型；没有图片用普通文字模型（更省钱更快）
-  const useModel = hasImages ? (model || 'moonshot-v1-32k-vision-preview') : (model || 'moonshot-v1-8k');
 
-  // 构造 content：纯文字用字符串，带图片用数组（文字+image_url 混合）
-  let content;
-  if (hasImages) {
-      content = [];
-      images.forEach(imgDataUrl => {
-          content.push({ type: 'image_url', image_url: { url: imgDataUrl } });
-      });
-      content.push({ type: 'text', text: '你是学习通助手。请结合上面的图片内容（可能是题目截图、PPT截图等）和下面的文字题目，给出简洁的答案或解题思路：\n' + question });
-  } else {
-      content = "你是学习通助手，只返回简洁的答案或解题思路：" + question;
+  // ===== 情况1：用户填了自己的 Key，直连 Moonshot，不走代理 =====
+  if (apiKey) {
+      const useModel = hasImages ? (model || 'moonshot-v1-32k-vision-preview') : (model || 'moonshot-v1-8k');
+      let content;
+      if (hasImages) {
+          content = [];
+          images.forEach(imgDataUrl => {
+              content.push({ type: 'image_url', image_url: { url: imgDataUrl } });
+          });
+          content.push({ type: 'text', text: '你是学习通助手。请结合上面的图片内容（可能是题目截图、PPT截图等）和下面的文字题目，给出简洁的答案或解题思路：\n' + question });
+      } else {
+          content = "你是学习通助手，只返回简洁的答案或解题思路：" + question;
+      }
+
+      try {
+          const response = await fetch("https://api.moonshot.cn/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${apiKey}`
+              },
+              body: JSON.stringify({
+                  model: useModel,
+                  messages: [{ role: "user", content: content }],
+                  temperature: 1,
+                  max_tokens: 1500
+              })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error.message);
+          return data.choices[0].message.content;
+      } catch (error) {
+          console.error("AI请求失败（自带Key）：", error);
+          return "AI请求失败：" + error.message;
+      }
   }
 
+  // ===== 情况2：用户没填Key，走 Worker 代理（公共Key + 限流）=====
   try {
-    const response = await fetch("https://api.moonshot.cn/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: useModel,
-        messages: [
-          { role: "user", content: content }
-        ],
-        temperature: 1,
-        max_tokens: 1500
-      })
-    });
+      const deviceId = getDeviceId();
+      const response = await fetch(WORKER_PROXY_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+              question,
+              images: hasImages ? images : undefined,
+              deviceId
+          })
+      });
 
-    const data = await response.json();
-    if (data.error) {
-      throw new Error(data.error.message);
-    }
-    return data.choices[0].message.content;
+      const data = await response.json();
+
+      if (data.limitReached) {
+          return '⚠️ ' + data.error;
+      }
+      if (data.error) {
+          throw new Error(data.error);
+      }
+
+      // 在答案末尾附上今日剩余次数提示，方便用户掌握额度
+      if (typeof data.usedCount === 'number' && typeof data.dailyLimit === 'number') {
+          const remaining = data.dailyLimit - data.usedCount;
+          debugLog(`✅ AI生成成功（今日已用 ${data.usedCount}/${data.dailyLimit} 次，剩余 ${remaining} 次）`);
+      }
+
+      return data.answer;
   } catch (error) {
-    console.error("AI请求失败：", error);
-    return "AI请求失败：" + error.message;
+      console.error("AI请求失败（公共代理）：", error);
+      return "AI请求失败：" + error.message + "\n\n你也可以在设置中填入自己的 Moonshot API Key 来获得不限次数的使用。";
   }
 }
 
@@ -382,4 +431,4 @@ const api = {
 };
 
 window.api = api;
-debugLog('✅ api.js v1.2.11 已加载（支持图片识别 + 收件箱作业自动解析对接）');
+debugLog('✅ api.js v1.3.0 已加载（公共代理 + 自带Key双模式）');

@@ -237,15 +237,15 @@
 
         <!-- API Key 设置 -->
         <div class="apikey-section">
-            <h2>🔑 设置 Moonshot API Key</h2>
-            <p>用于 AI 生成答案。新用户注册免费送 15 元额度。</p>
+            <h2>🔑 AI 使用设置</h2>
+            <p>✨ <strong>默认无需设置</strong>：每天可免费使用 AI 生成答案（有次数限制）。如果想不限次数使用，可在下方填入你自己的 Moonshot API Key。</p>
             <div class="apikey-input-group">
-                <input type="password" id="apiKey" placeholder="请输入 Moonshot API Key">
+                <input type="password" id="apiKey" placeholder="（可选）填入你自己的 Moonshot API Key 解除次数限制">
                 <button class="btn" onclick="saveApiKey()">保存</button>
                 <button class="btn" onclick="testApiKey()">测试</button>
             </div>
             <div class="apikey-help">
-                还没有 API Key？<a href="https://platform.moonshot.cn" target="_blank">点击注册 Moonshot</a>（新用户免费 15 元额度）
+                还没有 API Key？<a href="https://platform.moonshot.cn" target="_blank">点击注册 Moonshot</a>（新用户免费 15 元额度）。不填也可以正常使用，只是每日有次数限制。
             </div>
             <div class="apikey-status" id="apiKeyStatus" style="display: none;"></div>
         </div>
@@ -461,14 +461,7 @@
                 return;
             }
 
-            // 检查 API Key
-            const apiKey = localStorage.getItem('moonshot_api_key');
-            if (!apiKey) {
-                msgEl.textContent = '请先设置 Moonshot API Key';
-                msgEl.className = 'message error';
-                document.getElementById('apiKey').focus();
-                return;
-            }
+            // API Key 现在是可选的（不填则使用公共代理，每日有次数限制）
 
             btn.disabled = true;
             btn.textContent = '获取中...';
@@ -577,12 +570,6 @@
 
         // 显示题目
         async function showQuestions(workId, url, title) {
-            const apiKey = localStorage.getItem('moonshot_api_key');
-            if (!apiKey) {
-                alert('请先设置 Moonshot API Key');
-                return;
-            }
-
             const modal = document.getElementById('answerModal');
             const container = document.getElementById('questionsContainer');
 
