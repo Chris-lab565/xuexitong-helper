@@ -300,8 +300,21 @@
                     const t = p.innerText.trim();
                     if (t) contentParts.push(t);
                 });
-                const content = contentParts.join('\n').trim();
-                if (!content) return;
+                let content = contentParts.join('\n').trim();
+
+                // 题目可能是图片形式（老师截图贴上去的），文字内容为空时，提取图片地址
+                const questionImages = [];
+                h3.querySelectorAll('img').forEach(img => {
+                    if (img.src) questionImages.push(img.src);
+                });
+
+                // 文字和图片都没有，才真正跳过这道题
+                if (!content && questionImages.length === 0) return;
+
+                if (!content && questionImages.length > 0) {
+                    content = '[此题题目为图片形式，未包含文字，需结合图片内容回答]';
+                    console.log(`[学习通助手] 题目${idx+1} 检测到图片题目，图片数量:`, questionImages.length);
+                }
 
                 // 题目ID：从隐藏 input name="answertype{id}" 提取
                 const answerInput = qEl.querySelector('input[name^="answertype"]');
@@ -315,8 +328,8 @@
                     if (t) options.push(t);
                 });
 
-                questions.push({ qid, type: typeText, answerType, content, options });
-                console.log(`[学习通助手] 题目${idx+1}(${typeText}):`, content.substring(0, 60));
+                questions.push({ qid, type: typeText, answerType, content, options, images: questionImages });
+                console.log(`[学习通助手] 题目${idx+1}(${typeText}):`, content.substring(0, 60), questionImages.length > 0 ? `[含${questionImages.length}张图片]` : '');
             });
 
             console.log('[学习通助手] 共解析题目:', questions.length);
