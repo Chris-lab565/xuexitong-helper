@@ -605,6 +605,7 @@
                 questions.forEach((q, idx) => {
                     const safeTitle = (q.title || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     const qKey = `${workId}_${q.qid}`;
+                    const hasAutoImages = q.autoImages && q.autoImages.length > 0;
 
                     html += `
                         <div class="question-box" style="margin-bottom: 15px;">
@@ -612,6 +613,12 @@
                             ${q.options && q.options.length > 0 ? `
                                 <div style="margin: 10px 0; padding-left: 20px;">
                                     ${q.options.map(opt => `<p style="margin: 3px 0;">${opt}</p>`).join('')}
+                                </div>
+                            ` : ''}
+                            ${hasAutoImages ? `
+                                <div style="margin: 10px 0; padding: 10px; background: #fff3cd; border-radius: 8px; font-size: 13px; color: #856404;">
+                                    📷 检测到题目包含 ${q.autoImages.length} 张图片，已自动识别加入分析
+                                    <div class="image-preview-list" id="autoPreview-${qKey}" style="margin-top: 8px;"></div>
                                 </div>
                             ` : ''}
                             ${renderImageUploadArea(qKey)}
@@ -628,6 +635,11 @@
                             </div>
                         </div>
                     `;
+
+                    // 异步把题目里自动抓取到的图片转成 base64，加入该题的图片缓存
+                    if (hasAutoImages) {
+                        loadAutoImagesForQuestion(qKey, q.autoImages);
+                    }
                 });
 
                 container.innerHTML = html;
@@ -640,6 +652,40 @@
         // ===== 图片上传相关 =====
         // 每道题的已上传图片缓存：{ qKey: [base64dataUrl, ...] }
         const questionImages = {};
+
+        // 把插件自动检测到的题目图片（学习通图片URL）下载并转成 base64，加入该题图片缓存
+        // 注：因 CORS 限制，部分图片可能无法跨域下载，失败时静默跳过（不影响手动上传图片功能）
+        async function loadAutoImagesForQuestion(qKey, imageUrls) {
+            if (!questionImages[qKey]) questionImages[qKey] = [];
+
+            for (const url of imageUrls) {
+                try {
+                    const resp = await fetch(url);
+                    const blob = await resp.blob();
+                    const dataUrl = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(blob);
+                    });
+                    questionImages[qKey].push(dataUrl);
+                } catch (e) {
+                    console.warn('[助手] 自动图片下载失败（可能是跨域限制），跳过:', url, e.message);
+                }
+            }
+
+            // 更新预览区（如果存在）
+            const previewEl = document.getElementById(`autoPreview-${qKey}`);
+            if (previewEl && questionImages[qKey].length > 0) {
+                renderImagePreviews(qKey);
+                // renderImagePreviews 默认渲染到 previewList-{qKey}，这里手动同步到 autoPreview 区域
+                previewEl.innerHTML = questionImages[qKey].map((img, i) => `
+                    <div class="image-preview-item">
+                        <img src="${img}" alt="自动识别图片${i+1}">
+                    </div>
+                `).join('');
+            }
+        }
 
         // 渲染图片上传区域 HTML
         function renderImageUploadArea(qKey) {

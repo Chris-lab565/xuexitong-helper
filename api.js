@@ -274,7 +274,8 @@ async function getQuestionsViaExtension(url, workId) {
             qid: q.qid,
             type: q.type,
             title: q.content,
-            options: q.options || []
+            options: q.options || [],
+            autoImages: q.images || []
         }));
     }
 
