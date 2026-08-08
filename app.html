@@ -123,7 +123,6 @@
         .debug-step.success { color: #a6e3a1; }
         .debug-step.error { color: #f38ba8; }
         .debug-step.pending { color: #6c7086; }
-
         /* 图片上传区域 */
         .image-upload-area {
             border: 2px dashed #ccc;
@@ -188,7 +187,6 @@
             color: #999;
             margin-top: 6px;
         }
-
         /* 导出按钮 */
         .export-actions {
             display: flex;
@@ -219,7 +217,6 @@
             </div>
         </div>
     </header>
-
     <div class="container">
         <!-- 扩展安装提示 -->
         <div class="extension-notice" id="extensionNotice">
@@ -234,13 +231,12 @@
             </ol>
             <p><span class="extension-status error" id="extensionStatus">❌ 扩展未安装</span></p>
         </div>
-
         <!-- API Key 设置 -->
         <div class="apikey-section">
             <h2>🔑 AI 使用设置</h2>
             <p>✨ <strong>默认无需设置</strong>：每天可免费使用 AI 生成答案（有次数限制）。如果想不限次数使用，可在下方填入你自己的 Moonshot API Key。</p>
             <div class="apikey-input-group">
-                <input type="password" id="apiKey" placeholder="（可选）填入你自己的 Moonshot API Key 解除次数限制">
+                <input type="password" id="apiKey" placeholder="（可选）填入你自己的 Moonshot API Key">
                 <button class="btn" onclick="saveApiKey()">保存</button>
                 <button class="btn" onclick="testApiKey()">测试</button>
             </div>
@@ -249,7 +245,6 @@
             </div>
             <div class="apikey-status" id="apiKeyStatus" style="display: none;"></div>
         </div>
-
         <!-- 调试状态面板 -->
         <div class="debug-panel" id="debugPanel" style="display: none;">
             <div class="debug-header">
@@ -262,7 +257,6 @@
                 <div class="debug-step pending" id="stepHomework">⏳ 获取作业...</div>
             </div>
         </div>
-
         <!-- 登录区域 -->
         <div class="login-section">
             <h2>🔐 连接学习通</h2>
@@ -272,7 +266,6 @@
             </button>
             <div class="message" id="connectMessage"></div>
         </div>
-
         <!-- 统计卡片 -->
         <div class="stats">
             <div class="stat-card">
@@ -288,7 +281,6 @@
                 <div class="number" id="totalCount">0</div>
             </div>
         </div>
-
         <!-- 作业列表 -->
         <div class="homework-list">
             <h2>
@@ -302,18 +294,16 @@
                 <div class="loading-spinner"></div>
                 <p>正在加载作业...</p>
             </div>
-
             <div id="homeworkContainer">
                 <div class="empty-state">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     <p>点击「一键获取作业」开始</p>
                 </div>
             </div>
         </div>
     </div>
-
     <!-- 答案弹窗 -->
     <div class="answer-modal" id="answerModal">
         <div class="modal-content">
@@ -326,7 +316,6 @@
             </div>
         </div>
     </div>
-
     <script src="api.js"></script>
     <script>
         // 检查激活状态
@@ -342,7 +331,6 @@
             document.getElementById('userEmail').textContent = email;
         }
         checkAuth();
-
         // 调试面板辅助函数
         function showDebugPanel() {
             document.getElementById('debugPanel').style.display = 'block';
@@ -354,16 +342,13 @@
                 el.className = 'debug-step ' + status;
             }
         }
-
         // 检查扩展是否安装
         async function checkExtension() {
             showDebugPanel();
             updateDebugStep('stepExtension', 'pending', '⏳ 检测扩展...');
-
             const installed = await api.checkExtension();
             const statusEl = document.getElementById('extensionStatus');
             const noticeEl = document.getElementById('extensionNotice');
-
             if (installed) {
                 statusEl.textContent = '✅ 扩展已安装';
                 statusEl.className = 'extension-status ok';
@@ -375,13 +360,10 @@
                 noticeEl.style.display = 'block';
                 updateDebugStep('stepExtension', 'error', '❌ 扩展未安装 — 请检查扩展是否已加载');
             }
-
             return installed;
         }
-
         // 页面加载时检查扩展
         checkExtension();
-
         // 退出登录
         function logout() {
             if (confirm('确定要退出吗？')) {
@@ -392,7 +374,6 @@
                 window.location.href = 'index.html';
             }
         }
-
         // 保存 API Key
         function saveApiKey() {
             const apiKey = document.getElementById('apiKey').value.trim();
@@ -404,7 +385,6 @@
             localStorage.setItem('moonshot_api_key', apiKey);
             showApiKeyStatus('API Key 已保存', 'ok');
         }
-
         // 测试 API Key
         async function testApiKey() {
             const apiKey = document.getElementById('apiKey').value.trim() || localStorage.getItem('moonshot_api_key');
@@ -434,7 +414,6 @@
                 showApiKeyStatus('❌ 测试失败: ' + err.message, 'error');
             }
         }
-
         // 显示 API Key 状态
         function showApiKeyStatus(text, type) {
             const statusEl = document.getElementById('apiKeyStatus');
@@ -442,17 +421,14 @@
             statusEl.className = 'apikey-status ' + type;
             statusEl.style.display = 'block';
         }
-
         // 连接学习通
         async function connectXuexitong() {
             const btn = document.getElementById('connectBtn');
             const msgEl = document.getElementById('connectMessage');
-
             showDebugPanel();
             updateDebugStep('stepExtension', 'pending', '⏳ 检测扩展...');
             updateDebugStep('stepCookie', 'pending', '⏳ 获取 Cookie...');
             updateDebugStep('stepHomework', 'pending', '⏳ 获取作业...');
-
             // 检查扩展
             const extensionInstalled = await checkExtension();
             if (!extensionInstalled) {
@@ -460,13 +436,10 @@
                 msgEl.className = 'message error';
                 return;
             }
-
             // API Key 现在是可选的（不填则使用公共代理，每日有次数限制）
-
             btn.disabled = true;
             btn.textContent = '获取中...';
             msgEl.textContent = '';
-
             try {
                 updateDebugStep('stepCookie', 'pending', '⏳ 获取 Cookie（DOM → storage → postMessage）...');
                 updateDebugStep('stepHomework', 'pending', '⏳ 等待 Cookie 就绪...');
@@ -484,7 +457,6 @@
                 btn.textContent = '🚀 一键获取作业';
             }
         }
-
         // 加载作业列表
         async function loadHomework() {
             const container = document.getElementById('homeworkContainer');
@@ -509,7 +481,7 @@
                     container.innerHTML = `
                         <div class="empty-state">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                             <p>暂无作业</p>
                         </div>
@@ -526,7 +498,6 @@
                     const submitUrl = hw.submitUrl || '';
                     const realUrl = 'https://mooc1.chaoxing.com/mooc-ans/work/doHomeWork?courseId=' + (hw.courseId || '') + '&classId=' + (hw.classId || '') + '&workId=' + (hw.workId || '');
                     const safeTitle = (hw.title || '未命名作业').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-
                     const hwEl = document.createElement('div');
                     hwEl.className = 'homework-item';
                     hwEl.innerHTML = `
@@ -542,7 +513,7 @@
                         </div>
                         <div class="homework-actions">
                             <button class="btn btn-small" onclick="showQuestions('${hw.workId}', '${realUrl}', '${safeTitle}')">📝 查看题目</button>
-                            <button class="btn btn-secondary btn-small" onclick="copySubmitUrl('${submitUrl.replace(/'/g, "\\'")}')">🔗 去提交</button>
+                            <button class="btn btn-secondary btn-small" onclick='generateAndCopySubmitUrl(${JSON.stringify(hw)})'>🔗 去提交(生成有效链接)</button>
                         </div>
                     `;
                     container.appendChild(hwEl);
@@ -552,7 +523,7 @@
                 container.innerHTML = `
                     <div class="empty-state">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>
                         <p>加载失败: ${err.message}</p>
                         <p style="font-size: 12px; color: #999;">请确保已登录学习通官网</p>
@@ -562,27 +533,22 @@
                 loading.style.display = 'none';
             }
         }
-
         // 刷新作业
         function refreshHomework() {
             loadHomework();
         }
-
         // 显示题目
         async function showQuestions(workId, url, title) {
             const modal = document.getElementById('answerModal');
             const container = document.getElementById('questionsContainer');
-
             modal.style.display = 'flex';
             container.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>加载题目中...</p></div>';
-
             try {
                 const questions = await api.getQuestions(workId, url);
-
                 if (!questions || !Array.isArray(questions) || questions.length === 0) {
                     container.innerHTML = `
                         <h4 style="margin-bottom: 15px; color: #667eea;">${title}</h4>
-                        <p style="color: #856404; margin-bottom: 10px; font-size: 13px;">⚠️ 自动解析失败，可手动粘贴题目内容</p>
+                        <p style="color: #856404; margin-bottom: 10px; font-size: 13px;">⚠️ 自动解析失败，可手动粘贴题目</p>
                         <textarea id="manualQuestion-${workId}" style="width:100%;height:120px;padding:10px;border:1px solid #ddd;border-radius:5px;font-size:14px;resize:vertical;box-sizing:border-box;" placeholder="解析失败，请在此粘贴题目内容"></textarea>
                         ${renderImageUploadArea(workId + '_manual')}
                         <div style="margin-top: 10px;">
@@ -599,14 +565,11 @@
                     `;
                     return;
                 }
-
                 let html = `<h4 style="margin-bottom: 15px; color: #667eea;">${title}</h4>`;
-
                 questions.forEach((q, idx) => {
                     const safeTitle = (q.title || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     const qKey = `${workId}_${q.qid}`;
                     const hasAutoImages = q.autoImages && q.autoImages.length > 0;
-
                     html += `
                         <div class="question-box" style="margin-bottom: 15px;">
                             <p><strong>${q.qid || idx + 1}. [${q.type || '未知题型'}]</strong> ${q.title || '无题目内容'}</p>
@@ -635,41 +598,33 @@
                             </div>
                         </div>
                     `;
-
                     // 异步把题目里自动抓取到的图片转成 base64，加入该题的图片缓存
                     if (hasAutoImages) {
                         loadAutoImagesForQuestion(qKey, q.autoImages);
                     }
                 });
-
                 container.innerHTML = html;
-
             } catch (err) {
                 container.innerHTML = `<p class="error">加载题目失败: ${err.message}</p>`;
             }
         }
-
         // ===== 图片上传相关 =====
         // 每道题的已上传图片缓存：{ qKey: [base64dataUrl, ...] }
         const questionImages = {};
-
         // 把插件自动检测到的题目图片（学习通图片URL）下载并转成 base64，加入该题图片缓存
         // 注：因 CORS/登录态限制，部分图片可能无法跨域下载（会返回HTML而非图片），失败时静默跳过
         async function loadAutoImagesForQuestion(qKey, imageUrls) {
             if (!questionImages[qKey]) questionImages[qKey] = [];
             let successCount = 0;
-
             for (const url of imageUrls) {
                 try {
                     const resp = await fetch(url, { credentials: 'include' });
                     const contentType = resp.headers.get('content-type') || '';
-
                     // 校验：必须是真正的图片格式，否则说明被拦截/未授权（返回了HTML登录页等）
                     if (!contentType.startsWith('image/')) {
                         console.warn('[助手] 图片下载返回的不是图片格式（可能需要登录态或跨域受限）:', url, '实际类型:', contentType);
                         continue;
                     }
-
                     const blob = await resp.blob();
                     const dataUrl = await new Promise((resolve, reject) => {
                         const reader = new FileReader();
@@ -683,7 +638,6 @@
                     console.warn('[助手] 自动图片下载失败（可能是跨域限制），跳过:', url, e.message);
                 }
             }
-
             // 更新预览区（如果存在）
             const previewEl = document.getElementById(`autoPreview-${qKey}`);
             if (previewEl) {
@@ -699,7 +653,6 @@
                 }
             }
         }
-
         // 渲染图片上传区域 HTML
         function renderImageUploadArea(qKey) {
             return `
@@ -713,12 +666,10 @@
                 </div>
             `;
         }
-
         // 处理图片选择
         async function handleImageSelect(qKey, files) {
             if (!files || files.length === 0) return;
             if (!questionImages[qKey]) questionImages[qKey] = [];
-
             for (const file of files) {
                 if (!file.type.startsWith('image/')) continue;
                 try {
@@ -730,7 +681,6 @@
             }
             renderImagePreviews(qKey);
         }
-
         // 渲染已上传图片的缩略图预览
         function renderImagePreviews(qKey) {
             const listEl = document.getElementById(`previewList-${qKey}`);
@@ -743,7 +693,6 @@
                 </div>
             `).join('');
         }
-
         // 移除某张已上传图片
         function removeImage(qKey, index) {
             if (questionImages[qKey]) {
@@ -751,20 +700,16 @@
                 renderImagePreviews(qKey);
             }
         }
-
         // ===== 导出 Word / PDF =====
         // 导出答案为 Word 文档
         async function exportAnswerAsWord(qKey, title) {
             const answerBox = document.getElementById(`answer-${qKey}`);
             const answerText = answerBox.querySelector('.answer-content').textContent;
-
             if (!window.docx) {
                 alert('导出库加载中，请稍后再试');
                 return;
             }
-
             const { Document, Packer, Paragraph, TextRun, HeadingLevel } = window.docx;
-
             const paragraphs = [
                 new Paragraph({
                     text: title || '作业答案',
@@ -772,18 +717,15 @@
                 }),
                 new Paragraph({ text: '' }),
             ];
-
-            // 按换行拆分答案内容，逐段写入
+            // 按换行拆分答案，逐段写入
             answerText.split('\n').forEach(line => {
                 paragraphs.push(new Paragraph({
                     children: [new TextRun(line || ' ')],
                 }));
             });
-
             const doc = new Document({
                 sections: [{ properties: {}, children: paragraphs }],
             });
-
             try {
                 const blob = await Packer.toBlob(doc);
                 saveAs(blob, `${(title || '作业答案').substring(0, 30)}.docx`);
@@ -791,23 +733,18 @@
                 alert('导出Word失败: ' + e.message);
             }
         }
-
         // 导出答案为 PDF 文档
         function exportAnswerAsPdf(qKey, title) {
             const answerBox = document.getElementById(`answer-${qKey}`);
             const answerText = answerBox.querySelector('.answer-content').textContent;
-
             if (!window.jspdf) {
                 alert('导出库加载中，请稍后再试');
                 return;
             }
-
             try {
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF();
-
-                // 注意：jsPDF 默认字体不支持中文，这里用浏览器自带的方式绘制图片化文字以保证中文正常显示
-                // 简单稳妥方案：把内容渲染到一个隐藏的canvas/div上再截图插入PDF
+                // 简单稳妥方案：画布渲染防中文乱码
                 const tempDiv = document.createElement('div');
                 tempDiv.style.position = 'fixed';
                 tempDiv.style.left = '-9999px';
@@ -819,7 +756,6 @@
                 tempDiv.style.whiteSpace = 'pre-wrap';
                 tempDiv.innerHTML = `<h2>${title || '作业答案'}</h2><div>${answerText.replace(/\n/g, '<br>')}</div>`;
                 document.body.appendChild(tempDiv);
-
                 if (window.html2canvas) {
                     html2canvas(tempDiv).then(canvas => {
                         const imgData = canvas.toDataURL('image/png');
@@ -830,7 +766,6 @@
                         document.body.removeChild(tempDiv);
                     });
                 } else {
-                    // 没有 html2canvas 时的回退：直接用 jsPDF 文字输出（中文可能显示异常，但保证有文件可下载）
                     doc.setFontSize(14);
                     const lines = doc.splitTextToSize(answerText, 180);
                     doc.text(title || '作业答案', 10, 15);
@@ -842,8 +777,7 @@
                 alert('导出PDF失败: ' + e.message);
             }
         }
-
-        // 生成 AI 答案
+        // 生成 AI 答案（已修改：使用formatAnswer格式化渲染，解决换行/加粗乱码）
         async function generateAnswer(workId, question) {
             const apiKey = localStorage.getItem('moonshot_api_key');
             const answerBox = document.getElementById(`answer-${workId}`);
@@ -855,12 +789,12 @@
             
             try {
                 const answer = await api.generateAnswer(question, apiKey, undefined, images);
-                answerContent.textContent = answer;
+                // 修改点：由textContent改为innerHTML，调用api格式化函数
+                answerContent.innerHTML = api.formatAnswer(answer);
             } catch (err) {
                 answerContent.textContent = '生成答案失败: ' + err.message;
             }
         }
-
         // 从手动文本框读取内容并生成AI答案
         function generateAnswerFromTextarea(workId) {
             const textarea = document.getElementById(`manualQuestion-${workId}`);
@@ -871,7 +805,6 @@
             const question = textarea.value.trim();
             generateAnswer(`${workId}_manual`, question);
         }
-
         // 复制答案
         function copyAnswer(workId) {
             const answerBox = document.getElementById(`answer-${workId}`);
@@ -880,13 +813,11 @@
                 alert('答案已复制到剪贴板！');
             });
         }
-
         // 关闭弹窗
         function closeModal() {
             document.getElementById('answerModal').style.display = 'none';
         }
-
-        // 复制提交链接到剪贴板
+        // 复制提交链接到剪贴板（旧方法，保留兼容）
         function copySubmitUrl(url) {
             if (!url) {
                 alert('没有可用的提交链接');
@@ -908,6 +839,18 @@
             });
         }
 
+        // 新增：动态获取加密参数，生成真实可访问的提交链接
+        async function generateAndCopySubmitUrl(hw) {
+            const res = await api.getSubmitUrl(hw.cookie, hw.courseId, hw.classId, hw.workId);
+            if (res.success) {
+                await navigator.clipboard.writeText(res.url);
+                alert('提交链接已复制，自动打开作答页面');
+                window.open(res.url);
+            } else {
+                alert('链接生成失败，请手动打开作业文件夹页面获取链接');
+            }
+        }
+
         // 跳转学习通提交页面
         function goToXuexitong(url) {
             if (url) {
@@ -917,12 +860,10 @@
                 window.open('https://mooc1.chaoxing.com/mooc-ans/work/stu-work', '_blank');
             }
         }
-
         // 点击弹窗外部关闭
         document.getElementById('answerModal').addEventListener('click', function(e) {
             if (e.target === this) closeModal();
         });
-
         // 页面加载时恢复 API Key
         const savedApiKey = localStorage.getItem('moonshot_api_key');
         if (savedApiKey) {
