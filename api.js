@@ -433,3 +433,35 @@ const api = {
 
 window.api = api;
 debugLog('✅ api.js v1.3.0 已加载（公共代理 + 自带Key双模式）');
+// 格式化AI返回Markdown文本，修复渲染乱码
+function formatAnswer(rawText) {
+    if (!rawText) return '';
+    let str = rawText.replace(/[\x00-\x1F\x7F]/g, '');
+    // HTML转义
+    str = str.replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    // 换行
+    str = str.replace(/\n/g, '<br>');
+    // 加粗 **xx**
+    str = str.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // 无序列表 -
+    str = str.replace(/^- (.+)$/gm, '<li>$1</li>');
+    return str;
+}
+
+// 封装生成提交链接接口
+async function getSubmitUrl(cookie, courseId, classId, workId) {
+    return new Promise(resolve => {
+        window.postMessage({
+            type: 'XUEXITONG_GENERATE_SUBMIT_URL',
+            cookie, courseId, classId, workId
+        }, '*');
+        const handler = (ev) => {
+            if (ev.data.type !== 'XUEXITONG_HELPER_SUBMIT_URL_RESPONSE') return;
+            window.removeEventListener('message', handler);
+            resolve(ev.data);
+        }
+        window.addEventListener('message', handler);
+    })
+}
