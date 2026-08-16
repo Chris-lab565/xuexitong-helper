@@ -908,13 +908,22 @@
             });
         }
 
-        // 跳转学习通提交页面
+        // 跳转学习通提交页面（优先通过学习通域名中转，保证在站内上下文执行，携带 Cookie/Referer）
         function goToXuexitong(url) {
-            if (url) {
-                window.open(url, '_blank');
-            } else {
+            if (!url) {
                 // 回退到学习通首页
                 window.open('https://mooc1.chaoxing.com/mooc-ans/work/stu-work', '_blank');
+                return;
+            }
+
+            // 仅对学习通域名做中转处理
+            const isXuexitongTarget = /chaoxing\.com|xuexitong\.com/.test(url);
+            if (isXuexitongTarget) {
+                const gotoUrl = 'https://mooc1.chaoxing.com/?xt_goto=' + encodeURIComponent(url);
+                window.open(gotoUrl, '_blank');
+            } else {
+                // 其他外部链接直接打开
+                window.open(url, '_blank');
             }
         }
 
