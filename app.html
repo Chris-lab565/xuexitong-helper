@@ -523,7 +523,7 @@
                     const statusText = hw.status === 'pending' ? '待完成' :
                                       hw.status === 'done' ? '已完成' : '已逾期';
                     const officialUrl = hw.officialUrl || '';
-                    const submitUrl = hw.submitUrl || '';
+                    const submitUrl = hw.pageUrl || hw.submitUrl || '';
                     const realUrl = submitUrl || ('https://mooc1.chaoxing.com/mooc-ans/mooc2/work/dowork?courseId=' + (hw.courseId || '') + '&classId=' + (hw.classId || '') + '&workId=' + (hw.workId || ''));
                     const safeTitle = (hw.title || '未命名作业').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
