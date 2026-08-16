@@ -334,6 +334,23 @@ function getDeviceId() {
 const WORKER_PROXY_URL = 'https://xuexitong-ai-proxy.woaichixiaodangao.workers.dev';
 
 // 生成 AI 答案
+// 清理并解码 AI 返回的文本，解决常见的乱码/转义问题
+function sanitizeAnswer(text) {
+    if (!text) return text;
+    try {
+        // 将类似 "\\u201c" 的 unicode 转义序列转换为真实字符
+        text = text.replace(/\\u([0-9a-fA-F]{4})/g, (m, g) => String.fromCharCode(parseInt(g, 16)));
+        // 解码 HTML 实体（利用 DOM 环境）
+        const ta = document.createElement('textarea');
+        ta.innerHTML = text;
+        text = ta.value;
+    } catch (e) {
+        // 在极少数无 DOM 环境下降级为原始文本
+    }
+    // 移除零宽字符、替换常见替换字符，并修剪首尾空白
+    text = text.replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\uFFFD/g, '').trim();
+    return text;
+}
 // - 如果用户填了自己的 apiKey：直连 Moonshot（不走代理，不计入限额）
 // - 如果用户没填 apiKey：走 Worker 代理，使用公共Key（有每日限流）
 // images: 可选，base64 data URL 数组
@@ -371,7 +388,7 @@ async function getAnswer(question, apiKey, model, images) {
 
           const data = await response.json();
           if (data.error) throw new Error(data.error.message);
-          return data.choices[0].message.content;
+          return sanitizeAnswer(data.choices[0].message.content);
       } catch (error) {
           console.error("AI请求失败（自带Key）：", error);
           return "AI请求失败：" + error.message;
@@ -406,7 +423,7 @@ async function getAnswer(question, apiKey, model, images) {
           debugLog(`✅ AI生成成功（今日已用 ${data.usedCount}/${data.dailyLimit} 次，剩余 ${remaining} 次）`);
       }
 
-      return data.answer;
+      return sanitizeAnswer(data.answer);
   } catch (error) {
       console.error("AI请求失败（公共代理）：", error);
       return "AI请求失败：" + error.message + "\n\n你也可以在设置中填入自己的 Moonshot API Key 来获得不限次数的使用。";
@@ -433,35 +450,3 @@ const api = {
 
 window.api = api;
 debugLog('✅ api.js v1.3.0 已加载（公共代理 + 自带Key双模式）');
-// 格式化AI返回Markdown文本，修复渲染乱码
-function formatAnswer(rawText) {
-    if (!rawText) return '';
-    let str = rawText.replace(/[\x00-\x1F\x7F]/g, '');
-    // HTML转义
-    str = str.replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-    // 换行
-    str = str.replace(/\n/g, '<br>');
-    // 加粗 **xx**
-    str = str.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    // 无序列表 -
-    str = str.replace(/^- (.+)$/gm, '<li>$1</li>');
-    return str;
-}
-
-// 封装生成提交链接接口
-async function getSubmitUrl(cookie, courseId, classId, workId) {
-    return new Promise(resolve => {
-        window.postMessage({
-            type: 'XUEXITONG_GENERATE_SUBMIT_URL',
-            cookie, courseId, classId, workId
-        }, '*');
-        const handler = (ev) => {
-            if (ev.data.type !== 'XUEXITONG_HELPER_SUBMIT_URL_RESPONSE') return;
-            window.removeEventListener('message', handler);
-            resolve(ev.data);
-        }
-        window.addEventListener('message', handler);
-    })
-}
